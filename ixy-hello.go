@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -13,7 +12,7 @@ func removeDriver(pciAddr string) {
 	fd, err := os.OpenFile(path, os.O_WRONLY, 0700)
 	defer fd.Close()
 	if err != nil {
-		fmt.Println("no driver loaded")
+		fmt.Printf("no driver loaded: %v", err)
 		return
 	}
 	_, err = fd.WriteAt([]byte(pciAddr), 0)
@@ -24,7 +23,7 @@ func removeDriver(pciAddr string) {
 
 func enableDma(pciAddr string) {
 	path := fmt.Sprintf("/sys/bus/pci/devices/%v/config", pciAddr)
-	fd, err := os.OpenFile(path, os.O_RDWR, 0777)
+	fd, err := os.OpenFile(path, os.O_RDWR, 0700)
 	defer fd.Close()
 	if err != nil {
 		log.Fatalf("Error opening pci config: %v", err)
@@ -48,7 +47,7 @@ func pciMapRessource(pciAddr string) []byte {
 	fmt.Printf("Mapping PCI resource at %v\n", path)
 	removeDriver(pciAddr)
 	enableDma(pciAddr)
-	fd, err := os.OpenFile(path, os.O_RDWR, 0777)
+	fd, err := os.OpenFile(path, os.O_RDWR, 0700)
 	if err != nil {
 		log.Fatalf("Error opening pci ressource: %v", err)
 	}
@@ -64,8 +63,8 @@ func pciMapRessource(pciAddr string) []byte {
 func pciOpenRessource(pciAddr string, ressource string) *os.File {
 	path := fmt.Sprintf("/sys/bus/pci/devices/%v/%v", pciAddr, ressource)
 	//debug information
-	print("Opening PCI resource at %v", path)
-	fd, err := os.OpenFile(path, os.O_RDWR, 0777)
+	print("Opening PCI resource at %v \n", path)
+	fd, err := os.OpenFile(path, os.O_RDWR, 0700)
 	if err != nil {
 		log.Fatalf("Error opening pci ressource: %v", err)
 	}
@@ -73,16 +72,12 @@ func pciOpenRessource(pciAddr string, ressource string) *os.File {
 }
 
 func main() {
-	fmt.Println("hello world!\n\nAttempting to read from MMIO")
-	//get pci address
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter pci address:\n")
-	pciaddr, err := reader.ReadString('\n')
-	if err != nil {
-		log.Fatalf("Error reading from stdin: %v", err)
+	if len(os.Args) != 2 {
+		fmt.Printf("Usage: %v <pci bus id>")
+		return
 	}
-	//todo: read from mmap
-	mmap := pciMapRessource(pciaddr)
+	fmt.Println("Hello world!\nAttempting to read from MMIO...")
+	mmap := pciMapRessource(os.Args[1])
 	fmt.Printf("Here's the mmaped file:\n%v", mmap)
 	return
 }
