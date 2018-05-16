@@ -12,7 +12,7 @@ func removeDriver(pciAddr string) {
 	fd, err := os.OpenFile(path, os.O_WRONLY, 0700)
 	defer fd.Close()
 	if err != nil {
-		fmt.Printf("no driver loaded: %v", err)
+		fmt.Printf("no driver loaded: %v\n", err)
 		return
 	}
 	_, err = fd.WriteAt([]byte(pciAddr), 0)
@@ -35,7 +35,7 @@ func enableDma(pciAddr string) {
 	if err != nil {
 		log.Fatalf("Error reading from config: %v", err)
 	}
-	dma[len(dma)] |= 1 << 2
+	dma[len(dma)-1] |= 1 << 2
 	_, err = fd.WriteAt(dma, 4)
 	if err != nil {
 		log.Fatalf("Error writing dma flag to config: %v\n", err)
@@ -43,7 +43,7 @@ func enableDma(pciAddr string) {
 }
 
 func pciMapRessource(pciAddr string) []byte {
-	path := fmt.Sprintf("/sys/bus/pci/devices/%v/ressource0", pciAddr)
+	path := fmt.Sprintf("/sys/bus/pci/devices/%v/resource0", pciAddr)
 	fmt.Printf("Mapping PCI resource at %v\n", path)
 	removeDriver(pciAddr)
 	enableDma(pciAddr)
@@ -73,7 +73,7 @@ func pciOpenRessource(pciAddr string, ressource string) *os.File {
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Printf("Usage: %v <pci bus id>")
+		fmt.Printf("Usage: %v <pci bus id>", os.Args[0])
 		return
 	}
 	fmt.Println("Hello world!\nAttempting to read from MMIO...")
