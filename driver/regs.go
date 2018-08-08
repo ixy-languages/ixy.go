@@ -68,6 +68,9 @@ func readIo32(fd *os.File, offset uint) uint32 {
 	if err != nil {
 		log.Fatal("ReadAt io resource failed")
 	}
+	if isBig {
+		return binary.BigEndian.Uint32(buf[0:])
+	}
 	return binary.LittleEndian.Uint32(buf[0:])
 	//return *(*uint32)(unsafe.Pointer(&buf[0]))
 }
@@ -78,6 +81,9 @@ func readIo16(fd *os.File, offset uint) uint16 {
 	_, err := fd.ReadAt(buf, int64(offset))
 	if err != nil {
 		log.Fatal("ReadAt io resource failed")
+	}
+	if isBig {
+		return binary.BigEndian.Uint16(buf[0:])
 	}
 	return binary.LittleEndian.Uint16(buf[0:])
 }
@@ -95,11 +101,11 @@ func readIo8(fd *os.File, offset uint) uint8 {
 //setter for pci io port resources
 func writeIo32(fd *os.File, value uint32, offset uint) {
 	buf := make([]byte, 4)
-	//assuming Little Endiannes, if not try
-	//b := (*[4]byte)(unsafe.Pointer(&i))
-	//if b[0] == 1 {nativeEndian = binary.LittleEndian} else {nativeEndian = binary.BigEndian}
-	//on the card to get endiannes
-	binary.LittleEndian.PutUint32(buf, value)
+	if isBig {
+		binary.BigEndian.PutUint32(buf, value)
+	} else {
+		binary.LittleEndian.PutUint32(buf, value)
+	}
 	_, err := fd.WriteAt(buf, int64(offset))
 	if err != nil {
 		log.Fatal("WriteAt io resource failed")
@@ -109,7 +115,11 @@ func writeIo32(fd *os.File, value uint32, offset uint) {
 
 func writeIo16(fd *os.File, value uint16, offset uint) {
 	buf := make([]byte, 2)
-	binary.LittleEndian.PutUint16(buf, value)
+	if isBig {
+		binary.BigEndian.PutUint16(buf, value)
+	} else {
+		binary.LittleEndian.PutUint16(buf, value)
+	}
 	_, err := fd.WriteAt(buf, int64(offset))
 	if err != nil {
 		log.Fatal("WriteAt io resource failed")
