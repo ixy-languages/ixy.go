@@ -146,10 +146,12 @@ func virtToPhys(virt uintptr) uintptr {
 	if err != nil {
 		log.Fatalf("Error translating address: %v", err)
 	}
-	//since the uintptr we read is either 4 or 8 bytes, we need to reconstruct it from the byte slice
 	var phy uintptr
-	for i, v := range rbuf {
-		phy += uintptr(v) << (8 * uint(len(rbuf)-i-1)) //sizeof(byte) = 8
+	//since uintptr can technically be 4 our 8 byte we could check for that but that's probably irrelevant
+	if isBig {
+		phy = uintptr(binary.BigEndian.Uint64(rbuf))
+	} else {
+		phy = uintptr(binary.LittleEndian.Uint64(rbuf))
 	}
 	if phy == 0 {
 		log.Fatalf("failed to translate virtual address %#v to physical address", virt)
@@ -214,11 +216,13 @@ func MemoryAllocateMempool(numEntries, entrySize uint32) *Mempool {
 		log.Fatalf("entry size must be a divisor of the huge page size (%v)", hugePageSize)
 	}
 	mem := memoryAllocateDma(numEntries*entrySize, false)
+	fStack := make([]uint32, numEntries)
 	mempool := Mempool{
 		buf:          mem.virt,
 		bufSize:      entrySize,
 		numEntries:   numEntries,
 		freeStackTop: numEntries,
+		freeStack:    fStack,
 	}
 	for i := uint32(0); i < numEntries; i++ {
 		mempool.freeStack[i] = i

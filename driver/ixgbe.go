@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"reflect"
 	"syscall"
 	"time"
 	"unsafe"
@@ -25,8 +24,8 @@ const (
 type ixgbeDevice struct {
 	ixy      IxyDevice
 	addr     []byte
-	rxQueues []*ixgbeRxQueue
-	txQueues []*ixgbeTxQueue
+	rxQueues []ixgbeRxQueue
+	txQueues []ixgbeTxQueue
 }
 
 type ixgbeRxQueue struct {
@@ -204,7 +203,7 @@ func (dev *ixgbeDevice) initTx() {
 
 	//per-queue config for all queues
 	for i := 0; uint16(i) < dev.ixy.NumTxQueues; i++ {
-		fmt.Printf("initializing tx queue %v", i)
+		fmt.Printf("initializing tx queue %v\n", i)
 
 		//setup descriptor ring, see section 7.1.9
 		ringSizeBytes := uint32(numTxQueueEntries * 16) //see initRx
@@ -218,9 +217,8 @@ func (dev *ixgbeDevice) initTx() {
 		setReg32(&dev.addr[0], IXGBE_TDBAL(i), uint32(mem.phy&0xFFFFFFFF))
 		setReg32(&dev.addr[0], IXGBE_TDBAH(i), uint32(mem.phy>>32))
 		setReg32(&dev.addr[0], IXGBE_TDLEN(i), ringSizeBytes)
-		fmt.Printf("tx ring %v phy addr: %+#v", i, mem.phy)
-		hdr := (*reflect.SliceHeader)(unsafe.Pointer(&mem.virt))
-		fmt.Printf("tx ring %v virt addr: %+#v", i, hdr.Data)
+		fmt.Printf("tx ring %v phy addr: %+#v\n", i, mem.phy)
+		fmt.Printf("tx ring %v virt addr: %+#v\n", i, uintptr(unsafe.Pointer(&mem.virt[0])))
 
 		//descriptor writeback magic values, important to get good performance and low PCIe overhead
 		//see 7.2.3.4.1 and 7.2.3.5 for an explanation of these values and how to find good ones
@@ -320,9 +318,9 @@ func ixgbeInit(pciAddr string, rxQueues, txQueues uint16) IxyInterface {
 	dev.ixy.DriverName = driverName
 	dev.ixy.NumRxQueues = rxQueues
 	dev.ixy.NumTxQueues = txQueues
-	dev.addr = pciMapResource(pciAddr)             //todo: .addr -> [] bc a pointer ro a slice is not what we want -> change .addr uses to &.addr[x]
-	dev.rxQueues = make([]*ixgbeRxQueue, rxQueues) //todo: see if that's correct
-	dev.txQueues = make([]*ixgbeTxQueue, txQueues)
+	dev.addr = pciMapResource(pciAddr)
+	dev.rxQueues = make([]ixgbeRxQueue, rxQueues) //todo: see if that's correct
+	dev.txQueues = make([]ixgbeTxQueue, txQueues)
 	dev.resetAndInit()
 	return dev
 }
