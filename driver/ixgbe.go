@@ -73,7 +73,7 @@ func (dev *ixgbeDevice) startRxQueue(queueID int) {
 		mempoolEntries = 4096
 	}
 	queue.mempool = MemoryAllocateMempool(mempoolEntries, 2048)
-	if queue.numEntries&(queue.numEntries-1) == 0 {
+	if queue.numEntries&(queue.numEntries-1) != 0 {
 		log.Fatal("number of queue entries must be a power of 2")
 	}
 	for i := uint16(0); i < queue.numEntries; i++ {
@@ -101,7 +101,7 @@ func (dev *ixgbeDevice) startRxQueue(queueID int) {
 func (dev *ixgbeDevice) startTxQueue(queueID int) {
 	fmt.Printf("starting tx queue %v", queueID)
 	queue := dev.txQueues[queueID]
-	if queue.numEntries&(queue.numEntries-1) == 0 {
+	if queue.numEntries&(queue.numEntries-1) != 0 {
 		log.Fatal("number of queue entries must be a power of 2")
 	}
 	//tx queue starts out empty
@@ -245,14 +245,14 @@ func (dev *ixgbeDevice) initTx() {
 }
 
 func (dev *ixgbeDevice) waitForLink() {
-	fmt.Printf("Waiting for link...")
+	fmt.Printf("Waiting for link...\n")
 	maxWait := time.Second * 10
 	pollInterval := time.Millisecond * 10
 	for speed := dev.getLinkSpeed(); speed == 0 && maxWait > 0; speed = dev.getLinkSpeed() {
 		time.Sleep(pollInterval)
 		maxWait -= pollInterval
 	}
-	fmt.Printf("Link speed is %v Mbit/s", dev.getLinkSpeed())
+	fmt.Printf("Link speed is %v Mbit/s\n", dev.getLinkSpeed())
 }
 
 //see section 4.6.3

@@ -44,7 +44,7 @@ func enableDma(pciAddr string) {
 
 func pciMapResource(pciAddr string) []byte {
 	path := fmt.Sprintf("/sys/bus/pci/devices/%v/resource0", pciAddr)
-	fmt.Printf("\nMapping PCI resource at %v\n", path)
+	fmt.Printf("Mapping PCI resource at %v\n", path)
 	removeDriver(pciAddr)
 	enableDma(pciAddr)
 	fd, err := os.OpenFile(path, os.O_RDWR, 0700)
