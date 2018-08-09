@@ -51,7 +51,7 @@ func IxyInit(pciAddr string, rxQueues, txQueues uint16) IxyInterface {
 	return ixgbeInit(pciAddr, rxQueues, txQueues)
 }
 
-//IxyTxBatchBusyWait calls ixy_tx_batch until all packets are queued with busy waiting
+//IxyTxBatchBusyWait calls dev.TxBatch until all packets are queued with busy waiting
 func IxyTxBatchBusyWait(dev IxyInterface, queueID uint16, bufs [][]byte) {
 	numBufs := uint32(len(bufs))
 	for numSent := uint32(0); numSent != numBufs; numSent += dev.TxBatch(0, bufs[numSent:], numBufs-numSent) {

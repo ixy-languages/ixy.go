@@ -61,7 +61,7 @@ func (dev *ixgbeDevice) initLink() {
 func (dev *ixgbeDevice) startRxQueue(queueID int) {
 	//debug info
 	fmt.Printf("starting rx queue %v\n", queueID)
-	queue := dev.rxQueues[queueID]
+	queue := &dev.rxQueues[queueID]
 	// 2048 as pktbuf size is strictly speaking incorrect:
 	// we need a few headers (1 cacheline), so there's only 1984 bytes left for the device
 	// but the 82599 can only handle sizes in increments of 1 kb; but this is fine since our max packet size
@@ -100,7 +100,7 @@ func (dev *ixgbeDevice) startRxQueue(queueID int) {
 
 func (dev *ixgbeDevice) startTxQueue(queueID int) {
 	fmt.Printf("starting tx queue %v", queueID)
-	queue := dev.txQueues[queueID]
+	queue := &dev.txQueues[queueID]
 	if queue.numEntries&(queue.numEntries-1) != 0 {
 		log.Fatal("number of queue entries must be a power of 2")
 	}
@@ -142,7 +142,6 @@ func (dev *ixgbeDevice) initRx() {
 		mem := memoryAllocateDma(ringSizeBytes, true)
 		//neat trick from Snabb: initialize 0xFF to prevent rogue memory accesses on premature DMA activation
 		//copy memory -> fill in log(n) compared to iterating (even with optimization this is faster)
-		//if golang mmap does zero-initialize this, then we yould probably skip this
 		if len(mem.virt) != 0 {
 			mem.virt[0] = 0xFF
 		}
@@ -158,9 +157,8 @@ func (dev *ixgbeDevice) initRx() {
 		setReg32(&dev.addr[0], IXGBE_RDH(int(i)), 0)
 		setReg32(&dev.addr[0], IXGBE_RDT(int(i)), 0)
 		//private data for the driver, 0-initialized
-		queue := dev.rxQueues[i]
-		queue.numEntries = numRxQueueEntries
-		queue.rxIndex = 0
+		dev.rxQueues[i].numEntries = numRxQueueEntries
+		dev.rxQueues[i].rxIndex = 0
 		/*
 			we have the []byte mem.virt. That's where the packet descriptors (IxgbeAdvRxDesc) will be
 			-> find a way so we get an []IxgbeAdvDesc that uses the same memory area
@@ -168,11 +166,11 @@ func (dev *ixgbeDevice) initRx() {
 		//original: queue->descriptors = (union ixgbe_adv_tx_desc*) mem.virt;
 		//test: AdvDesc hold slices
 		//-> divide mem.virt into len(mem.virt)/16 subslices and collect them in a slice
-		desc := make([]IxgbeAdvRxDesc, len(mem.virt)/16)
-		for i := 0; i < len(mem.virt)/16; i++ {
+		desc := make([]IxgbeAdvRxDesc, numRxQueueEntries)
+		for i := 0; i < numRxQueueEntries; i++ {
 			desc[i] = IxgbeAdvRxDesc{raw: mem.virt[i*16 : (i+1)*16]} //creating subslices should be not too inefficient since they all use the same underlying array (what we want ayways)
 		}
-		queue.descriptors = desc
+		dev.rxQueues[i].descriptors = desc
 	}
 	//last step is to set some magic bits mentioned in the last sentence in 4.6.7
 	setFlags32(&dev.addr[0], IXGBE_CTRL_EXT, IXGBE_CTRL_EXT_NS_DIS)
@@ -231,14 +229,13 @@ func (dev *ixgbeDevice) initTx() {
 		setReg32(&dev.addr[0], IXGBE_TXDCTL(i), txdctl)
 
 		//private data for the driver, 0-initialized
-		queue := dev.txQueues[i]
-		queue.numEntries = numTxQueueEntries
+		dev.txQueues[i].numEntries = numTxQueueEntries
 		//see rxInit
 		desc := make([]IxgbeAdvTxDesc, len(mem.virt)/16)
 		for i := 0; i < len(mem.virt)/16; i++ {
 			desc[i] = IxgbeAdvTxDesc{raw: mem.virt[i*16 : (i+1)*16]} //creating subslices should be not too inefficient since they all use the same underlying array (what we want ayways)
 		}
-		queue.descriptors = desc
+		dev.txQueues[i].descriptors = desc
 	}
 	//final step: enable dma
 	setReg32(&dev.addr[0], IXGBE_DMATXCTL, IXGBE_DMATXCTL_TE)
@@ -376,7 +373,7 @@ func wrapRing(index, ringSize uint16) uint16 {
 //see datasheet section 7.1.9 for an explanation of the rx ring structure
 //tl;dr: we control the tail of the queue, the hardware the head
 func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs [][]byte, numBufs uint32) uint32 {
-	queue := dev.rxQueues[queueID]
+	queue := &dev.rxQueues[queueID]
 	rxIndex := queue.rxIndex
 	lastRxIndex := rxIndex
 	bufIndex := uint32(0)
@@ -445,7 +442,7 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 //huge performance gains possible here by sending packets in batches - writing to TDT for every packet is not efficient
 //returns the number of packets transmitted, will not block when the queue is full
 func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs [][]byte, numBufs uint32) uint32 {
-	queue := dev.txQueues[queueID]
+	queue := &dev.txQueues[queueID]
 	//the descriptor is explained in section 7.2.3.2.4
 	//we just use a struct copy & pasted from intel (not), but it basically has two formats (hence a union):
 	//1. the write-back format which is written by the NIC once sending it is finished this is used in step 1
@@ -536,9 +533,4 @@ func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 	//this seems like a textbook case for a release memory order, but Intel's driver doesn't even use a compiler barrier here
 	setReg32(&dev.addr[0], IXGBE_TDT(int(queueID)), uint32(queue.txIndex))
 	return sent
-}
-
-func test() {
-	bufs := make([]*PktBuf, 5)
-	bufs[0].Data[0]++
 }
