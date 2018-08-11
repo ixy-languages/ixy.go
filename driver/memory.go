@@ -39,7 +39,6 @@ type dmaMemory struct {
 	phy  uintptr
 }
 
-//todo: update driver to use this
 //readPktBuf interprets and translates the arg as a PktBuf
 func readPktBuf(mem []byte) *PktBuf {
 	lenWoData := 24 + sizePktBufHeadroom
@@ -84,7 +83,6 @@ func setPktBuf(mem []byte, pbuf *PktBuf) {
 	copy(mem[lenWoData:lenWoData+len(pbuf.Data)], pbuf.Data)
 }
 
-//todo: check datasheet
 //pktBufToByteSlice takes a PacketBuffer and returns a []byte that conforms to the needs of the NIC
 /*func pktBufToByteSlice(pbuf PktBuf) []byte {
 	lenWoData := 24 + sizePktBufHeadroom
@@ -262,8 +260,15 @@ func PktBufAlloc(mempool *Mempool) [][]byte {
 
 //PktBufFree frees PktBuf
 func PktBufFree(buf []byte) {
-	pbuf := readPktBuf(buf)
-	mempool := pbuf.Mempool
-	mempool.freeStack[mempool.freeStackTop] = pbuf.MempoolIdx
+	//pbuf := readPktBuf(buf)
+	//mempool := pbuf.Mempool
+	var mempool *Mempool
+	if isBig {
+		mempool = (*Mempool)(unsafe.Pointer(uintptr(binary.BigEndian.Uint64(buf[8:16]))))
+		mempool.freeStack[mempool.freeStackTop] = binary.BigEndian.Uint32(buf[16:20])
+	} else {
+		mempool = (*Mempool)(unsafe.Pointer(uintptr(binary.LittleEndian.Uint64(buf[8:16]))))
+		mempool.freeStack[mempool.freeStackTop] = binary.LittleEndian.Uint32(buf[16:20])
+	}
 	mempool.freeStackTop++
 }

@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-//todo: correct all instances of PktBuf
-
 const batchSize = 32
 
 func forward(rxDev, txDev driver.IxyInterface, rxQueue, txQueue uint16) {

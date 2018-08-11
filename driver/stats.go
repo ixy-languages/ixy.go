@@ -7,14 +7,14 @@ import (
 
 //DeviceStats holds stats
 type DeviceStats struct {
-	device                                 IxyInterface
+	device                                 *IxyInterface //let's see if that works
 	rxPackets, txPackets, rxBytes, txBytes uint64
 }
 
 //PrintStats prints stats
 func (stats *DeviceStats) PrintStats() {
-	dev := stats.device.getIxyDev()
-	var addr interface{}
+	dev := (*stats.device).getIxyDev()
+	var addr string
 	if stats.device != nil {
 		addr = dev.PciAddr
 	} else {
@@ -36,9 +36,9 @@ func diffMbit(bytesNew, bytesOld, pktsNew, pktsOld uint64, nanos time.Duration) 
 
 //PrintStatsDiff get difference between reciever and previous stats
 func (stats *DeviceStats) PrintStatsDiff(statsOld *DeviceStats, nanos time.Duration) {
-	oldDev := statsOld.device.getIxyDev()
-	newDev := stats.device.getIxyDev()
-	var addr interface{}
+	oldDev := (*statsOld.device).getIxyDev()
+	newDev := (*stats.device).getIxyDev()
+	var addr string
 	if statsOld.device != nil {
 		addr = oldDev.PciAddr
 	} else {
@@ -61,7 +61,7 @@ func (stats *DeviceStats) StatsInit(dev IxyInterface) {
 	stats.txPackets = 0
 	stats.rxBytes = 0
 	stats.txBytes = 0
-	stats.device = dev
+	stats.device = &dev
 	if dev != nil {
 		dev.ReadStats(nil) //Todo: implementieren und package importieren
 	}

@@ -47,7 +47,7 @@ func waitClearReg32(addr *uint8, reg int, mask uint32) {
 	C.mbarrier()
 	for cur := *(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg))); (cur & mask) != 0; cur = *(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg))) {
 		fmt.Printf("waiting for flags %+#v in register %+#v to clear, current value %+#v\n", mask, reg, cur)
-		time.Sleep(10000 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		C.mbarrier()
 	}
 }
@@ -55,7 +55,7 @@ func waitClearReg32(addr *uint8, reg int, mask uint32) {
 func waitSetReg32(addr *uint8, reg int, mask uint32) {
 	for cur := *(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg))); (cur & mask) != mask; cur = *(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg))) {
 		fmt.Printf("waiting for flags %+#v in register %+#v to clear, current value %+#v\n", mask, reg, cur)
-		time.Sleep(10000 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		C.mbarrier()
 	}
 }

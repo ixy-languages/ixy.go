@@ -99,7 +99,7 @@ func (dev *ixgbeDevice) startRxQueue(queueID int) {
 }
 
 func (dev *ixgbeDevice) startTxQueue(queueID int) {
-	fmt.Printf("starting tx queue %v", queueID)
+	fmt.Printf("starting tx queue %v\n", queueID)
 	queue := &dev.txQueues[queueID]
 	if queue.numEntries&(queue.numEntries-1) != 0 {
 		log.Fatal("number of queue entries must be a power of 2")
@@ -376,7 +376,7 @@ func wrapRing(index, ringSize uint16) uint16 {
 //try to receive a single packet if one is available, non-blocking
 //see datasheet section 7.1.9 for an explanation of the rx ring structure
 //tl;dr: we control the tail of the queue, the hardware the head
-func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs [][]byte, numBufs uint32) uint32 {
+func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs [][]byte, numBufs uint32) uint32 { //todo: cut numBufs and use len(bufs instead), also true for TxBatch
 	queue := &dev.rxQueues[queueID]
 	rxIndex := queue.rxIndex
 	lastRxIndex := rxIndex
