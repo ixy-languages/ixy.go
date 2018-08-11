@@ -179,21 +179,21 @@ func memoryAllocateDma(size uint32, requireContiguous bool) dmaMemory {
 	fd, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, syscall.S_IRWXU)
 	defer fd.Close()
 	if err != nil {
-		log.Fatal("opening hugetlbfs file failed, check that /mnt/huge is mounted\n")
+		log.Fatalf("opening hugetlbfs file failed, check that /mnt/huge is mounted. Error: %v\n", err)
 	}
 	err = fd.Truncate(int64(size))
 	if err != nil {
-		log.Fatal("allocating huge page memory failed, check hugetlbfs configuration\n")
+		log.Fatalf("allocating huge page memory failed, check hugetlbfs configuration. Error: %v\n", err)
 	}
 	var mmap []byte
 	mmap, err = syscall.Mmap(int(fd.Fd()), 0, int(size), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED|syscall.MAP_HUGETLB)
 	if err != nil {
-		log.Fatal("mmaping hugepage failed\n")
+		log.Fatalf("mmaping hugepage failed. Error: %v\n", err)
 	}
 	//never swap out DMA memory
 	err = syscall.Mlock(mmap)
 	if err != nil {
-		log.Fatal("disabling swap for DMA memory failed\n")
+		log.Fatalf("disabling swap for DMA memory failed. Error: %v\n", err)
 	}
 	syscall.Unlink(path)
 	//virt is a slice, phys a pointer -> extract Slice pointer for translation

@@ -157,8 +157,10 @@ func (dev *ixgbeDevice) initRx() {
 		setReg32(&dev.addr[0], IXGBE_RDH(int(i)), 0)
 		setReg32(&dev.addr[0], IXGBE_RDT(int(i)), 0)
 		//private data for the driver, 0-initialized
-		dev.rxQueues[i].numEntries = numRxQueueEntries
-		dev.rxQueues[i].rxIndex = 0
+		queue := &dev.rxQueues[i]
+		queue.numEntries = numRxQueueEntries
+		queue.virtualAddresses = make([][]byte, queue.numEntries)
+		queue.rxIndex = 0
 		/*
 			we have the []byte mem.virt. That's where the packet descriptors (IxgbeAdvRxDesc) will be
 			-> find a way so we get an []IxgbeAdvDesc that uses the same memory area
@@ -170,7 +172,7 @@ func (dev *ixgbeDevice) initRx() {
 		for i := 0; i < numRxQueueEntries; i++ {
 			desc[i] = IxgbeAdvRxDesc{raw: mem.virt[i*16 : (i+1)*16]} //creating subslices should be not too inefficient since they all use the same underlying array (what we want ayways)
 		}
-		dev.rxQueues[i].descriptors = desc
+		queue.descriptors = desc
 	}
 	//last step is to set some magic bits mentioned in the last sentence in 4.6.7
 	setFlags32(&dev.addr[0], IXGBE_CTRL_EXT, IXGBE_CTRL_EXT_NS_DIS)
@@ -229,13 +231,15 @@ func (dev *ixgbeDevice) initTx() {
 		setReg32(&dev.addr[0], IXGBE_TXDCTL(i), txdctl)
 
 		//private data for the driver, 0-initialized
-		dev.txQueues[i].numEntries = numTxQueueEntries
+		queue := &dev.txQueues[i]
+		queue.numEntries = numTxQueueEntries
+		queue.virtualAddresses = make([][]byte, queue.numEntries)
 		//see rxInit
 		desc := make([]IxgbeAdvTxDesc, len(mem.virt)/16)
 		for i := 0; i < len(mem.virt)/16; i++ {
 			desc[i] = IxgbeAdvTxDesc{raw: mem.virt[i*16 : (i+1)*16]} //creating subslices should be not too inefficient since they all use the same underlying array (what we want ayways)
 		}
-		dev.txQueues[i].descriptors = desc
+		queue.descriptors = desc
 	}
 	//final step: enable dma
 	setReg32(&dev.addr[0], IXGBE_DMATXCTL, IXGBE_DMATXCTL_TE)
