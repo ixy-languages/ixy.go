@@ -17,6 +17,8 @@ const (
 	sizePktBufHeadroom = 40
 )
 
+//TODO: rewrite using atomic/sync to load/store to shared memory!!!
+
 //PktBuf stuct that describes a packet buffer
 type PktBuf struct {
 	BufAddrPhy       uintptr
@@ -39,6 +41,7 @@ type dmaMemory struct {
 	phy  uintptr
 }
 
+//not used
 //readPktBuf interprets and translates the arg as a PktBuf
 func readPktBuf(mem []byte) *PktBuf {
 	lenWoData := 24 + sizePktBufHeadroom

@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"encoding/binary"
 	"fmt"
 	"log"
 	"os"
@@ -23,7 +24,7 @@ func removeDriver(pciAddr string) {
 
 func enableDma(pciAddr string) {
 	path := fmt.Sprintf("/sys/bus/pci/devices/%v/config", pciAddr)
-	fd, err := os.OpenFile(path, os.O_RDWR, 0700)
+	fd, err := os.OpenFile(path, os.O_RDWR, 0644)
 	defer fd.Close()
 	if err != nil {
 		log.Fatalf("Error opening pci config: %v", err)
@@ -35,7 +36,18 @@ func enableDma(pciAddr string) {
 	if err != nil {
 		log.Fatalf("Error reading from config: %v", err)
 	}
-	dma[len(dma)-1] |= 1 << 2
+	var dmaInt uint16
+	if isBig {
+		dmaInt = binary.BigEndian.Uint16(dma)
+	} else {
+		dmaInt = binary.LittleEndian.Uint16(dma)
+	}
+	dmaInt |= 1 << 2
+	if isBig {
+		binary.BigEndian.PutUint16(dma, dmaInt)
+	} else {
+		binary.LittleEndian.PutUint16(dma, dmaInt)
+	}
 	_, err = fd.WriteAt(dma, 4)
 	if err != nil {
 		log.Fatalf("Error writing dma flag to config: %v\n", err)
@@ -47,7 +59,7 @@ func pciMapResource(pciAddr string) []byte {
 	fmt.Printf("Mapping PCI resource at %v\n", path)
 	removeDriver(pciAddr)
 	enableDma(pciAddr)
-	fd, err := os.OpenFile(path, os.O_RDWR, 0700)
+	fd, err := os.OpenFile(path, os.O_RDWR, 0600)
 	if err != nil {
 		log.Fatalf("Error opening pci resource: %v", err)
 	}
@@ -65,18 +77,9 @@ func pciOpenResource(pciAddr string, resource string) *os.File {
 	path := fmt.Sprintf("/sys/bus/pci/devices/%v/%v", pciAddr, resource)
 	//debug information
 	fmt.Printf("Opening PCI resource at %v \n", path)
-	fd, err := os.OpenFile(path, os.O_RDWR, 0700)
+	fd, err := os.OpenFile(path, os.O_RDWR, 0644)
 	if err != nil {
 		log.Fatalf("Error opening pci resource: %v", err)
 	}
 	return fd
 }
-
-/*func main() {
-	//mmap and test by changing values according to the datasheet
-	if len(os.Args) != 2 {
-		log.Fatal("usage: pci")
-	}
-	mmap := pciMapResource(os.Args[1])
-	//write to mmap and see if it works
-}*/
