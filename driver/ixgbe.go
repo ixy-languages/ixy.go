@@ -84,10 +84,10 @@ func (dev *ixgbeDevice) startRxQueue(queueID int) {
 			log.Fatal("failed to allocate rx descriptor")
 		}
 		//write into first 64 bits
-		copy(rxd.raw[:8], buf[0:8])
+		copy(rxd.raw[:8], buf[:8])
 		//write into last 64 bits
 		binary.LittleEndian.PutUint64(rxd.raw[8:], uint64(0))
-		queue.virtualAddresses[i] = buf //[:0]	see later
+		queue.virtualAddresses[i] = buf
 	}
 	//enable queue and wait if necessary
 	setFlags32(dev.addr, IXGBE_RXDCTL(queueID), IXGBE_RXDCTL_ENABLE)
@@ -166,8 +166,7 @@ func (dev *ixgbeDevice) initRx() {
 			-> find a way so we get an []IxgbeAdvDesc that uses the same memory area
 		*/
 		//original: queue->descriptors = (union ixgbe_adv_tx_desc*) mem.virt;
-		//test: AdvDesc hold slices
-		//-> divide mem.virt into len(mem.virt)/16 subslices and collect them in a slice
+		//divide mem.virt into len(mem.virt)/16=numRxQueueEntries subslices and collect them in a slice
 		desc := make([]IxgbeAdvRxDesc, numRxQueueEntries)
 		for i := 0; i < numRxQueueEntries; i++ {
 			desc[i] = IxgbeAdvRxDesc{raw: mem.virt[i*16 : (i+1)*16]} //creating subslices should be not too inefficient since they all use the same underlying array (what we want ayways)
@@ -237,7 +236,7 @@ func (dev *ixgbeDevice) initTx() {
 		//see rxInit
 		desc := make([]IxgbeAdvTxDesc, len(mem.virt)/16)
 		for i := 0; i < len(mem.virt)/16; i++ {
-			desc[i] = IxgbeAdvTxDesc{raw: mem.virt[i*16 : (i+1)*16]} //creating subslices should be not too inefficient since they all use the same underlying array (what we want ayways)
+			desc[i] = IxgbeAdvTxDesc{raw: mem.virt[i*16 : (i+1)*16]}
 		}
 		queue.descriptors = desc
 	}
@@ -384,19 +383,21 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 	for ; bufIndex < numBufs; bufIndex++ {
 		//rx descriptors are explained in 7.1.5, advances rx descriptors in 7.1.6
 		//since go doesn't support unions, we just use the raw byte array (slice)
-		descPtr := queue.descriptors[rxIndex]
+		descPtr := queue.descriptors[rxIndex].raw
 		var status uint32
+		//pure bits -> check raw[8], this is the relevant Byte
 		if isBig {
-			status = binary.BigEndian.Uint32(descPtr.raw[8:12]) //bit 64 - 95 of the advanced rx recieve descriptor are the status/error
+			status = binary.BigEndian.Uint32(descPtr[8:12]) //bit 64 - 95 of the advanced rx recieve descriptor are the status/error
 		} else {
-			status = binary.LittleEndian.Uint32(descPtr.raw[8:12])
+			status = binary.LittleEndian.Uint32(descPtr[8:12])
 		}
 		if status&IXGBE_RXDADV_STAT_DD != 0 {
 			if status&IXGBE_RXDADV_STAT_EOP == 0 {
 				log.Fatal("multi-segment packets are not supported - increase buffer size or decrease MTU")
 			}
 			//got a packet, read and copy the whole descriptor
-			desc := descPtr.raw
+			desc := make([]byte, len(descPtr))
+			copy(desc, descPtr)
 			buf := queue.virtualAddresses[rxIndex]
 			if isBig {
 				//buf.Size = uint32(binary.BigEndian.Uint16(desc[12:14])) //bit 96 - 111 of the advanced rx recieve descriptor are the length
@@ -416,15 +417,15 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 			}
 			//reset descriptor
 			if isBig {
-				binary.BigEndian.PutUint64(descPtr.raw[:8], uint64(virtToPhys(uintptr(unsafe.Pointer(&newBuf[64])))))
-				binary.BigEndian.PutUint64(descPtr.raw[8:], uint64(0)) //resets the flags
+				binary.BigEndian.PutUint64(descPtr[:8], binary.BigEndian.Uint64(newBuf[:8])+64) //uint64(virtToPhys(uintptr(unsafe.Pointer(&newBuf[64])))))
+				binary.BigEndian.PutUint64(descPtr[8:], uint64(0))                              //resets the flags
 			} else {
-				binary.LittleEndian.PutUint64(descPtr.raw[:8], uint64(virtToPhys(uintptr(unsafe.Pointer(&newBuf[64])))))
-				binary.LittleEndian.PutUint64(descPtr.raw[8:], uint64(0))
+				binary.LittleEndian.PutUint64(descPtr[:8], binary.LittleEndian.Uint64(newBuf[:8])+64) //uint64(virtToPhys(uintptr(unsafe.Pointer(&newBuf[64])))))
+				binary.LittleEndian.PutUint64(descPtr[8:], uint64(0))
 			}
 			queue.virtualAddresses[rxIndex] = newBuf
 			bufs[bufIndex] = buf
-			//want to read the next one in the next iteration, but we still need the last/curretn to update RDT later
+			//want to read the next one in the next iteration, but we still need the last/current to update RDT later
 			lastRxIndex = rxIndex
 			rxIndex = wrapRing(rxIndex, queue.numEntries)
 		} else {
@@ -438,7 +439,7 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 		setReg32(dev.addr, IXGBE_RDT(int(queueID)), uint32(lastRxIndex))
 		queue.rxIndex = rxIndex
 	}
-	return bufIndex // number of packets stored in bufs; bufIndex "points" to the next index
+	return bufIndex //number of packets stored in bufs; bufIndex "points" to the next index
 }
 
 //section 1.8.1 and 7.2
@@ -519,7 +520,7 @@ func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 		if isBig {
 			size := binary.BigEndian.Uint32(buf[20:24])
 			binary.BigEndian.PutUint64(txd.raw[:8], binary.BigEndian.Uint64(buf[:8])+64)
-			// always the same flags: one buffer (EOP), advanced data descriptor, CRC offload, data length
+			//always the same flags: one buffer (EOP), advanced data descriptor, CRC offload, data length
 			binary.BigEndian.PutUint32(txd.raw[8:12], IXGBE_ADVTXD_DCMD_EOP|IXGBE_ADVTXD_DCMD_RS|IXGBE_ADVTXD_DCMD_IFCS|IXGBE_ADVTXD_DCMD_DEXT|IXGBE_ADVTXD_DTYP_DATA|size)
 			//no fancy offloading stuff - only the total payload length
 			//implement offloading flags here:
@@ -528,7 +529,7 @@ func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 			binary.BigEndian.PutUint32(txd.raw[12:16], size<<IXGBE_ADVTXD_PAYLEN_SHIFT)
 		} else {
 			size := binary.LittleEndian.Uint32(buf[20:24])
-			binary.LittleEndian.PutUint64(txd.raw[:8], binary.BigEndian.Uint64(buf[:8])+64)
+			binary.LittleEndian.PutUint64(txd.raw[:8], binary.LittleEndian.Uint64(buf[:8])+64)
 			binary.LittleEndian.PutUint32(txd.raw[8:12], IXGBE_ADVTXD_DCMD_EOP|IXGBE_ADVTXD_DCMD_RS|IXGBE_ADVTXD_DCMD_IFCS|IXGBE_ADVTXD_DCMD_DEXT|IXGBE_ADVTXD_DTYP_DATA|size)
 			binary.LittleEndian.PutUint32(txd.raw[12:16], size<<IXGBE_ADVTXD_PAYLEN_SHIFT)
 		}

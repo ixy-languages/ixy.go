@@ -12,7 +12,6 @@ const batchSize = 32
 func forward(rxDev, txDev driver.IxyInterface, rxQueue, txQueue uint16) {
 	bufs := make([][]byte, batchSize)
 	numRx := rxDev.RxBatch(rxQueue, bufs, batchSize)
-
 	if numRx > 0 {
 		//touch all packets, otherwise it's a completely unrealistic workload if the packet just stays in L3
 		for i := uint32(0); i < numRx; i++ {
