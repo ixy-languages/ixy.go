@@ -460,8 +460,9 @@ func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 	//start by reading step 2 which is done first for each packet
 	//cleaning up must be done in batches for performance reasons, so this is unfortunately somewhat complicated
 	for {
-		cleanable := curIndex - cleanIndex
-		if cleanable < 0 { //wrap around
+		//figure out how many descriptors can be cleaned up
+		cleanable := curIndex - cleanIndex //cur is always ahead of clean (invariant of our queue)
+		if cleanable < 0 {                 //wrap around
 			cleanable = queue.numEntries + cleanable
 		}
 		if cleanable < txCleanBatch {
@@ -517,7 +518,7 @@ func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 		//NIC reads from here
 		if isBig {
 			size := binary.BigEndian.Uint32(buf[20:24])
-			binary.BigEndian.PutUint64(txd.raw[:8], uint64(virtToPhys(uintptr((unsafe.Pointer(&buf[64]))))))
+			binary.BigEndian.PutUint64(txd.raw[:8], binary.BigEndian.Uint64(buf[:8])+64)
 			// always the same flags: one buffer (EOP), advanced data descriptor, CRC offload, data length
 			binary.BigEndian.PutUint32(txd.raw[8:12], IXGBE_ADVTXD_DCMD_EOP|IXGBE_ADVTXD_DCMD_RS|IXGBE_ADVTXD_DCMD_IFCS|IXGBE_ADVTXD_DCMD_DEXT|IXGBE_ADVTXD_DTYP_DATA|size)
 			//no fancy offloading stuff - only the total payload length
@@ -527,7 +528,7 @@ func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 			binary.BigEndian.PutUint32(txd.raw[12:16], size<<IXGBE_ADVTXD_PAYLEN_SHIFT)
 		} else {
 			size := binary.LittleEndian.Uint32(buf[20:24])
-			binary.LittleEndian.PutUint64(txd.raw[:8], uint64(uintptr((unsafe.Pointer(&buf[64])))))
+			binary.LittleEndian.PutUint64(txd.raw[:8], binary.BigEndian.Uint64(buf[:8])+64)
 			binary.LittleEndian.PutUint32(txd.raw[8:12], IXGBE_ADVTXD_DCMD_EOP|IXGBE_ADVTXD_DCMD_RS|IXGBE_ADVTXD_DCMD_IFCS|IXGBE_ADVTXD_DCMD_DEXT|IXGBE_ADVTXD_DTYP_DATA|size)
 			binary.LittleEndian.PutUint32(txd.raw[12:16], size<<IXGBE_ADVTXD_PAYLEN_SHIFT)
 		}
