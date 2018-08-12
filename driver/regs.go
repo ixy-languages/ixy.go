@@ -11,7 +11,6 @@ import (
 	"log"
 	"os"
 	"time"
-	"unsafe"
 )
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,39 +23,73 @@ import (
 
 //https://stackoverflow.com/questions/18491032/does-go-support-volatile-non-volatile-variables
 
+//DON'T use pointer, instead unse slices -> addr will always be []byte
+
 //getter/setter for PCIe memory mapped registers
-func setReg32(addr *uint8, reg int, value uint32) {
+func setReg32(addr []byte, reg int, value uint32) {
 	C.mbarrier()
-	*(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg))) = value
-}
-
-func getReg32(addr *uint8, reg int) uint32 {
-	C.mbarrier()
-	return *(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg)))
-}
-
-func setFlags32(addr *uint8, reg int, flags uint32) {
-	setReg32(addr, reg, getReg32(addr, reg)|flags)
-}
-
-func clearFlags32(addr *uint8, reg int, flags uint32) {
-	setReg32(addr, reg, getReg32(addr, reg)&^flags)
-}
-
-func waitClearReg32(addr *uint8, reg int, mask uint32) {
-	C.mbarrier()
-	for cur := *(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg))); (cur & mask) != 0; cur = *(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg))) {
-		fmt.Printf("waiting for flags %+#v in register %+#v to clear, current value %+#v\n", mask, reg, cur)
-		time.Sleep(10 * time.Millisecond)
-		C.mbarrier()
+	//*(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg))) = value
+	if isBig {
+		binary.BigEndian.PutUint32(addr[reg:reg+4], value)
+	} else {
+		binary.LittleEndian.PutUint32(addr[reg:reg+4], value)
 	}
 }
 
-func waitSetReg32(addr *uint8, reg int, mask uint32) {
-	for cur := *(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg))); (cur & mask) != mask; cur = *(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg))) {
+func getReg32(addr []byte, reg int) uint32 {
+	C.mbarrier()
+	//return *(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg)))
+	if isBig {
+		return binary.BigEndian.Uint32(addr[reg : reg+4])
+	}
+	return binary.LittleEndian.Uint32(addr[reg : reg+4])
+}
+
+func setFlags32(addr []byte, reg int, flags uint32) {
+	setReg32(addr, reg, getReg32(addr, reg)|flags)
+}
+
+func clearFlags32(addr []byte, reg int, flags uint32) {
+	setReg32(addr, reg, getReg32(addr, reg)&^flags)
+}
+
+func waitClearReg32(addr []byte, reg int, mask uint32) {
+	C.mbarrier()
+	var cur uint32
+	if isBig {
+		cur = binary.BigEndian.Uint32(addr[reg : reg+4])
+	} else {
+		cur = binary.LittleEndian.Uint32(addr[reg : reg+4])
+	}
+	for (cur & mask) != 0 {
 		fmt.Printf("waiting for flags %+#v in register %+#v to clear, current value %+#v\n", mask, reg, cur)
 		time.Sleep(10 * time.Millisecond)
 		C.mbarrier()
+		if isBig {
+			cur = binary.BigEndian.Uint32(addr[reg : reg+4])
+		} else {
+			cur = binary.LittleEndian.Uint32(addr[reg : reg+4])
+		}
+	}
+}
+
+func waitSetReg32(addr []byte, reg int, mask uint32) {
+	C.mbarrier()
+	var cur uint32
+	if isBig {
+		cur = binary.BigEndian.Uint32(addr[reg : reg+4])
+	} else {
+		cur = binary.LittleEndian.Uint32(addr[reg : reg+4])
+	}
+	for (cur & mask) != mask {
+		fmt.Printf("waiting for flags %+#v in register %+#v, current value %+#v\n", mask, reg, cur)
+		time.Sleep(10 * time.Millisecond)
+		C.mbarrier()
+		if isBig {
+			cur = binary.BigEndian.Uint32(addr[reg : reg+4])
+		} else {
+			cur = binary.LittleEndian.Uint32(addr[reg : reg+4])
+		}
 	}
 }
 
