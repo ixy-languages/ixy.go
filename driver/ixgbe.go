@@ -51,10 +51,10 @@ func (dev *ixgbeDevice) getIxyDev() IxyDevice {
 // see section 4.6.4
 func (dev *ixgbeDevice) initLink() {
 	// should already be set by the eeprom config, maybe we shouldn't override it here to support weirdo nics?
-	setReg32(&dev.addr[0], IXGBE_AUTOC, (getReg32(&dev.addr[0], IXGBE_AUTOC)&^IXGBE_AUTOC_LMS_MASK)|IXGBE_AUTOC_LMS_10G_SERIAL)
-	setReg32(&dev.addr[0], IXGBE_AUTOC, (getReg32(&dev.addr[0], IXGBE_AUTOC)&^IXGBE_AUTOC_10G_PMA_PMD_MASK)|IXGBE_AUTOC_10G_XAUI)
+	setReg32(dev.addr, IXGBE_AUTOC, (getReg32(dev.addr, IXGBE_AUTOC)&^IXGBE_AUTOC_LMS_MASK)|IXGBE_AUTOC_LMS_10G_SERIAL)
+	setReg32(dev.addr, IXGBE_AUTOC, (getReg32(dev.addr, IXGBE_AUTOC)&^IXGBE_AUTOC_10G_PMA_PMD_MASK)|IXGBE_AUTOC_10G_XAUI)
 	// negotiate link
-	setFlags32(&dev.addr[0], IXGBE_AUTOC, IXGBE_AUTOC_AN_RESTART)
+	setFlags32(dev.addr, IXGBE_AUTOC, IXGBE_AUTOC_AN_RESTART)
 	// datasheet wants us to wait for the link here, but we can continue and wait afterwards
 }
 
@@ -90,12 +90,12 @@ func (dev *ixgbeDevice) startRxQueue(queueID int) {
 		queue.virtualAddresses[i] = buf //[:0]	see later
 	}
 	//enable queue and wait if necessary
-	setFlags32(&dev.addr[0], IXGBE_RXDCTL(queueID), IXGBE_RXDCTL_ENABLE)
-	waitSetReg32(&dev.addr[0], IXGBE_RXDCTL(queueID), IXGBE_RXDCTL_ENABLE)
+	setFlags32(dev.addr, IXGBE_RXDCTL(queueID), IXGBE_RXDCTL_ENABLE)
+	waitSetReg32(dev.addr, IXGBE_RXDCTL(queueID), IXGBE_RXDCTL_ENABLE)
 	//rx queue starts out full
-	setReg32(&dev.addr[0], IXGBE_RDH(queueID), 0)
+	setReg32(dev.addr, IXGBE_RDH(queueID), 0)
 	//was set to 0 before in the init funtion
-	setReg32(&dev.addr[0], IXGBE_RDT(queueID), uint32(queue.numEntries-1))
+	setReg32(dev.addr, IXGBE_RDT(queueID), uint32(queue.numEntries-1))
 }
 
 func (dev *ixgbeDevice) startTxQueue(queueID int) {
@@ -105,38 +105,38 @@ func (dev *ixgbeDevice) startTxQueue(queueID int) {
 		log.Fatal("number of queue entries must be a power of 2")
 	}
 	//tx queue starts out empty
-	setReg32(&dev.addr[0], IXGBE_TDH(queueID), 0)
-	setReg32(&dev.addr[0], IXGBE_TDT(queueID), 0)
+	setReg32(dev.addr, IXGBE_TDH(queueID), 0)
+	setReg32(dev.addr, IXGBE_TDT(queueID), 0)
 	// enable queue and wait if necessary
-	setFlags32(&dev.addr[0], IXGBE_TXDCTL(queueID), IXGBE_TXDCTL_ENABLE)
-	waitSetReg32(&dev.addr[0], IXGBE_TXDCTL(queueID), IXGBE_TXDCTL_ENABLE)
+	setFlags32(dev.addr, IXGBE_TXDCTL(queueID), IXGBE_TXDCTL_ENABLE)
+	waitSetReg32(dev.addr, IXGBE_TXDCTL(queueID), IXGBE_TXDCTL_ENABLE)
 }
 
 //see section 4.6.7
 func (dev *ixgbeDevice) initRx() {
 	//make sure that rx is disabled while re-configuring it
 	//the datasheet also wants us to disable some crypto-offloading related rx paths (but we don't care about them)
-	clearFlags32(&dev.addr[0], IXGBE_RXCTRL, IXGBE_RXCTRL_RXEN)
+	clearFlags32(dev.addr, IXGBE_RXCTRL, IXGBE_RXCTRL_RXEN)
 	// no fancy dcb or vt, just a single 128kb packet buffer for us
-	setReg32(&dev.addr[0], IXGBE_RXPBSIZE(0), IXGBE_RXPBSIZE_128KB)
+	setReg32(dev.addr, IXGBE_RXPBSIZE(0), IXGBE_RXPBSIZE_128KB)
 	for i := 1; i < 8; i++ {
-		setReg32(&dev.addr[0], IXGBE_RXPBSIZE(i), 0)
+		setReg32(dev.addr, IXGBE_RXPBSIZE(i), 0)
 	}
 	// always enable CRC offloading
-	setFlags32(&dev.addr[0], IXGBE_HLREG0, IXGBE_HLREG0_RXCRCSTRP)
-	setFlags32(&dev.addr[0], IXGBE_RDRXCTL, IXGBE_RDRXCTL_CRCSTRIP)
+	setFlags32(dev.addr, IXGBE_HLREG0, IXGBE_HLREG0_RXCRCSTRP)
+	setFlags32(dev.addr, IXGBE_RDRXCTL, IXGBE_RDRXCTL_CRCSTRIP)
 
 	//accept broadcast packets
-	setFlags32(&dev.addr[0], IXGBE_FCTRL, IXGBE_FCTRL_BAM)
+	setFlags32(dev.addr, IXGBE_FCTRL, IXGBE_FCTRL_BAM)
 
 	//per-queue config, same for all queues
 	for i := uint16(0); i < dev.ixy.NumRxQueues; i++ {
 		fmt.Printf("initializing rx queue %v\n", i)
 		//enable advanced rx descriptors, we could also get away with legacy descriptors, but they aren't really easier
-		setReg32(&dev.addr[0], IXGBE_SRRCTL(int(i)), (getReg32(&dev.addr[0], IXGBE_SRRCTL(int(i)))&^IXGBE_SRRCTL_DESCTYPE_MASK)|IXGBE_SRRCTL_DESCTYPE_ADV_ONEBUF)
+		setReg32(dev.addr, IXGBE_SRRCTL(int(i)), (getReg32(dev.addr, IXGBE_SRRCTL(int(i)))&^IXGBE_SRRCTL_DESCTYPE_MASK)|IXGBE_SRRCTL_DESCTYPE_ADV_ONEBUF)
 		//drop_en causes the nic to drop packets if no rx descriptors are available instead of buffering them
 		//a single overflowing queue can fill up the whole buffer and impact operations if not setting this flag
-		setFlags32(&dev.addr[0], IXGBE_SRRCTL(int(i)), IXGBE_SRRCTL_DROP_EN)
+		setFlags32(dev.addr, IXGBE_SRRCTL(int(i)), IXGBE_SRRCTL_DROP_EN)
 		//setup descriptor ring, see section 7.1.9
 		ringSizeBytes := uint32(numRxQueueEntries * 16) //unsafe.Sizeof([16]byte or IxgbeAdvRxDesc)
 		mem := memoryAllocateDma(ringSizeBytes, true)
@@ -148,14 +148,14 @@ func (dev *ixgbeDevice) initRx() {
 		for filled := 1; filled < len(mem.virt); filled *= 2 {
 			copy(mem.virt[filled:], mem.virt[:filled])
 		}
-		setReg32(&dev.addr[0], IXGBE_RDBAL(int(i)), uint32(mem.phy&0xFFFFFFFF))
-		setReg32(&dev.addr[0], IXGBE_RDBAH(int(i)), uint32(mem.phy>>32))
-		setReg32(&dev.addr[0], IXGBE_RDLEN(int(i)), ringSizeBytes)
+		setReg32(dev.addr, IXGBE_RDBAL(int(i)), uint32(mem.phy&0xFFFFFFFF))
+		setReg32(dev.addr, IXGBE_RDBAH(int(i)), uint32(mem.phy>>32))
+		setReg32(dev.addr, IXGBE_RDLEN(int(i)), ringSizeBytes)
 		fmt.Printf("rx ring %v phy addr: %+#v\n", i, mem.phy)
 		fmt.Printf("rx ring %v virt addr: %+#v\n", i, uintptr(unsafe.Pointer(&mem.virt[0])))
 		//set ring to empty at start
-		setReg32(&dev.addr[0], IXGBE_RDH(int(i)), 0)
-		setReg32(&dev.addr[0], IXGBE_RDT(int(i)), 0)
+		setReg32(dev.addr, IXGBE_RDH(int(i)), 0)
+		setReg32(dev.addr, IXGBE_RDT(int(i)), 0)
 		//private data for the driver, 0-initialized
 		queue := &dev.rxQueues[i]
 		queue.numEntries = numRxQueueEntries
@@ -175,31 +175,31 @@ func (dev *ixgbeDevice) initRx() {
 		queue.descriptors = desc
 	}
 	//last step is to set some magic bits mentioned in the last sentence in 4.6.7
-	setFlags32(&dev.addr[0], IXGBE_CTRL_EXT, IXGBE_CTRL_EXT_NS_DIS)
+	setFlags32(dev.addr, IXGBE_CTRL_EXT, IXGBE_CTRL_EXT_NS_DIS)
 	//this flag probably refers to a broken feature: it's reserved and initialized as '1' but it must be set to '0'
 	//there isn't even a constant in ixgbe_types.h for this flag
 	for i := uint16(0); i < dev.ixy.NumRxQueues; i++ {
-		clearFlags32(&dev.addr[0], IXGBE_DCA_RXCTRL(int(i)), 1<<12)
+		clearFlags32(dev.addr, IXGBE_DCA_RXCTRL(int(i)), 1<<12)
 	}
 
 	// start RX
-	setFlags32(&dev.addr[0], IXGBE_RXCTRL, IXGBE_RXCTRL_RXEN)
+	setFlags32(dev.addr, IXGBE_RXCTRL, IXGBE_RXCTRL_RXEN)
 }
 
 //see section 4.6.8
 func (dev *ixgbeDevice) initTx() {
 	//crc offload and small packet padding
-	setFlags32(&dev.addr[0], IXGBE_HLREG0, IXGBE_HLREG0_TXCRCEN|IXGBE_HLREG0_TXPADEN)
+	setFlags32(dev.addr, IXGBE_HLREG0, IXGBE_HLREG0_TXCRCEN|IXGBE_HLREG0_TXPADEN)
 
 	//set default buffer size allocations
 	//see also: section 4.6.11.3.4, no fancy features like DCB and VTd
-	setReg32(&dev.addr[0], IXGBE_TXPBSIZE(0), IXGBE_TXPBSIZE_40KB)
+	setReg32(dev.addr, IXGBE_TXPBSIZE(0), IXGBE_TXPBSIZE_40KB)
 	for i := 1; i < 8; i++ {
-		setReg32(&dev.addr[0], IXGBE_TXPBSIZE(i), 0)
+		setReg32(dev.addr, IXGBE_TXPBSIZE(i), 0)
 	}
 	//required when not using DCB/VTd
-	setReg32(&dev.addr[0], IXGBE_DTXMXSZRQ, 0xFFFF)
-	clearFlags32(&dev.addr[0], IXGBE_RTTDCS, IXGBE_RTTDCS_ARBDIS)
+	setReg32(dev.addr, IXGBE_DTXMXSZRQ, 0xFFFF)
+	clearFlags32(dev.addr, IXGBE_RTTDCS, IXGBE_RTTDCS_ARBDIS)
 
 	//per-queue config for all queues
 	for i := 0; uint16(i) < dev.ixy.NumTxQueues; i++ {
@@ -214,21 +214,21 @@ func (dev *ixgbeDevice) initTx() {
 		for filled := 1; filled < len(mem.virt); filled *= 2 {
 			copy(mem.virt[filled:], mem.virt[:filled])
 		}
-		setReg32(&dev.addr[0], IXGBE_TDBAL(i), uint32(mem.phy&0xFFFFFFFF))
-		setReg32(&dev.addr[0], IXGBE_TDBAH(i), uint32(mem.phy>>32))
-		setReg32(&dev.addr[0], IXGBE_TDLEN(i), ringSizeBytes)
+		setReg32(dev.addr, IXGBE_TDBAL(i), uint32(mem.phy&0xFFFFFFFF))
+		setReg32(dev.addr, IXGBE_TDBAH(i), uint32(mem.phy>>32))
+		setReg32(dev.addr, IXGBE_TDLEN(i), ringSizeBytes)
 		fmt.Printf("tx ring %v phy addr: %+#v\n", i, mem.phy)
 		fmt.Printf("tx ring %v virt addr: %+#v\n", i, uintptr(unsafe.Pointer(&mem.virt[0])))
 
 		//descriptor writeback magic values, important to get good performance and low PCIe overhead
 		//see 7.2.3.4.1 and 7.2.3.5 for an explanation of these values and how to find good ones
 		//we just use the defaults from DPDK here, but this is a potentially interesting point for optimizations
-		txdctl := getReg32(&dev.addr[0], IXGBE_TXDCTL(i))
+		txdctl := getReg32(dev.addr, IXGBE_TXDCTL(i))
 		//there are no defines for this in ixgbe_h for some reason
 		//pthresh: 6:0, hthresh: 14:8, wthresh: 22:16
 		txdctl &= ^(uint32(0x3F | (0x3F << 8) | (0x3F << 16))) //clear bits
 		txdctl |= (36 | (8 << 8) | (4 << 16))                  //from DPDK
-		setReg32(&dev.addr[0], IXGBE_TXDCTL(i), txdctl)
+		setReg32(dev.addr, IXGBE_TXDCTL(i), txdctl)
 
 		//private data for the driver, 0-initialized
 		queue := &dev.txQueues[i]
@@ -242,7 +242,7 @@ func (dev *ixgbeDevice) initTx() {
 		queue.descriptors = desc
 	}
 	//final step: enable dma
-	setReg32(&dev.addr[0], IXGBE_DMATXCTL, IXGBE_DMATXCTL_TE)
+	setReg32(dev.addr, IXGBE_DMATXCTL, IXGBE_DMATXCTL_TE)
 }
 
 func (dev *ixgbeDevice) waitForLink() {
@@ -260,23 +260,23 @@ func (dev *ixgbeDevice) waitForLink() {
 func (dev *ixgbeDevice) resetAndInit() {
 	fmt.Printf("Resetting device %v\n", dev.ixy.PciAddr)
 	//section 4.6.3.1
-	setReg32(&dev.addr[0], IXGBE_EIMC, 0x7FFFFFFF)
+	setReg32(dev.addr, IXGBE_EIMC, 0x7FFFFFFF)
 
 	//section 4.6.3.2
-	setReg32(&dev.addr[0], IXGBE_CTRL, IXGBE_CTRL_RST_MASK)
-	waitClearReg32(&dev.addr[0], IXGBE_CTRL, IXGBE_CTRL_RST_MASK)
+	setReg32(dev.addr, IXGBE_CTRL, IXGBE_CTRL_RST_MASK)
+	waitClearReg32(dev.addr, IXGBE_CTRL, IXGBE_CTRL_RST_MASK)
 	time.Sleep(time.Millisecond)
 
 	//section 4.6.3.1 - disable interrupts again after reset
-	setReg32(&dev.addr[0], IXGBE_EIMC, 0x7FFFFFFF)
+	setReg32(dev.addr, IXGBE_EIMC, 0x7FFFFFFF)
 
 	fmt.Printf("Initializing device %v\n", dev.ixy.PciAddr)
 
 	//section 4.6.3 - Wait for EEPROM auto read completion
-	waitSetReg32(&dev.addr[0], IXGBE_EEC, IXGBE_EEC_ARD)
+	waitSetReg32(dev.addr, IXGBE_EEC, IXGBE_EEC_ARD)
 
 	//section 4.6.3 - Wait for DMA initialization done (RDRXCTL.DMAIDONE)
-	waitSetReg32(&dev.addr[0], IXGBE_RDRXCTL, IXGBE_RDRXCTL_DMAIDONE)
+	waitSetReg32(dev.addr, IXGBE_RDRXCTL, IXGBE_RDRXCTL_DMAIDONE)
 
 	//section 4.6.4 - initialize link (auto negotiation)
 	dev.initLink()
@@ -327,7 +327,7 @@ func ixgbeInit(pciAddr string, rxQueues, txQueues uint16) IxyInterface {
 }
 
 func (dev *ixgbeDevice) getLinkSpeed() uint32 {
-	links := getReg32(&dev.addr[0], IXGBE_LINKS)
+	links := getReg32(dev.addr, IXGBE_LINKS)
 	if links&IXGBE_LINKS_UP == 0 {
 		return 0
 	}
@@ -346,20 +346,20 @@ func (dev *ixgbeDevice) getLinkSpeed() uint32 {
 func (dev *ixgbeDevice) setPromisc(enabled bool) {
 	if enabled {
 		fmt.Println("enabling promisc mode")
-		setFlags32(&dev.addr[0], IXGBE_FCTRL, IXGBE_FCTRL_MPE|IXGBE_FCTRL_UPE)
+		setFlags32(dev.addr, IXGBE_FCTRL, IXGBE_FCTRL_MPE|IXGBE_FCTRL_UPE)
 	} else {
 		fmt.Println("disabling promisc mode")
-		clearFlags32(&dev.addr[0], IXGBE_FCTRL, IXGBE_FCTRL_MPE|IXGBE_FCTRL_UPE)
+		clearFlags32(dev.addr, IXGBE_FCTRL, IXGBE_FCTRL_MPE|IXGBE_FCTRL_UPE)
 	}
 }
 
 //read stat counters and accumulate in stats
 //stats may be nil to just reset the counters
 func (dev *ixgbeDevice) ReadStats(stats *DeviceStats) {
-	rxPkts := getReg32(&dev.addr[0], IXGBE_GPRC)
-	txPkts := getReg32(&dev.addr[0], IXGBE_GPTC)
-	rxBytes := uint64(getReg32(&dev.addr[0], IXGBE_GORCL)) | uint64(getReg32(&dev.addr[0], IXGBE_GORCH))<<32
-	txBytes := uint64(getReg32(&dev.addr[0], IXGBE_GOTCL)) | uint64(getReg32(&dev.addr[0], IXGBE_GOTCH))<<32
+	rxPkts := getReg32(dev.addr, IXGBE_GPRC)
+	txPkts := getReg32(dev.addr, IXGBE_GPTC)
+	rxBytes := uint64(getReg32(dev.addr, IXGBE_GORCL)) | uint64(getReg32(dev.addr, IXGBE_GORCH))<<32
+	txBytes := uint64(getReg32(dev.addr, IXGBE_GOTCL)) | uint64(getReg32(dev.addr, IXGBE_GOTCH))<<32
 	if stats != nil {
 		stats.rxPackets += uint64(rxPkts)
 		stats.txPackets += uint64(txPkts)
@@ -435,7 +435,7 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 		//tell hardware that we are done
 		//this is intentionally off by one, otherwise we'd set RDT=RDH if we are receiving faster than packets are coming in
 		//RDT=RDH means queue is full
-		setReg32(&dev.addr[0], IXGBE_RDT(int(queueID)), uint32(lastRxIndex))
+		setReg32(dev.addr, IXGBE_RDT(int(queueID)), uint32(lastRxIndex))
 		queue.rxIndex = rxIndex
 	}
 	return bufIndex // number of packets stored in bufs; bufIndex "points" to the next index
@@ -535,6 +535,6 @@ func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 	}
 	//send out by advancing tail, i.e., pass control of the bufs to the nic
 	//this seems like a textbook case for a release memory order, but Intel's driver doesn't even use a compiler barrier here
-	setReg32(&dev.addr[0], IXGBE_TDT(int(queueID)), uint32(queue.txIndex))
+	setReg32(dev.addr, IXGBE_TDT(int(queueID)), uint32(queue.txIndex))
 	return sent
 }
