@@ -67,7 +67,7 @@ func main() {
 				if dev1 != dev2 {
 					dev2.ReadStats(&stats2)
 					stats2.PrintStatsDiff(&stats2old, t.Sub(lastStatsPrinted))
-					stats2old = stats1
+					stats2old = stats2
 				}
 				lastStatsPrinted = t
 			}
