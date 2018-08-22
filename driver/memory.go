@@ -20,13 +20,13 @@ const (
 //TODO: rewrite using atomic/sync to load/store to shared memory!!!
 
 //PktBuf stuct that describes a packet buffer
-type PktBuf struct {
+/*type PktBuf struct {
 	BufAddrPhy       uintptr
 	Mempool          *Mempool
 	MempoolIdx, Size uint32
 	HeadRoom         [sizePktBufHeadroom]uint8
-	Data             []byte //probably the biggest problem: Data has to be directly after HeadRoom
-}
+	Data             []byte //probably the biggest problem: Data has to be directly after HeadRoom -> doesn't work because of that
+}*/
 
 //Mempool struct that describes a mempool
 type Mempool struct {
@@ -36,104 +36,10 @@ type Mempool struct {
 	freeStack                         []uint32
 }
 
-type dmaMemory struct {
-	virt []byte
-	phy  uintptr
-}
-
-//not used
-//readPktBuf interprets and translates the arg as a PktBuf
-func readPktBuf(mem []byte) *PktBuf {
-	lenWoData := 24 + sizePktBufHeadroom
-	var hdr [sizePktBufHeadroom]uint8
-	copy(hdr[:], mem[24:lenWoData])
-	var ret PktBuf
-	if isBig {
-		ret = PktBuf{
-			BufAddrPhy: uintptr(binary.BigEndian.Uint64(mem[:8])),
-			Mempool:    (*Mempool)(unsafe.Pointer(uintptr(binary.BigEndian.Uint64(mem[8:16])))),
-			MempoolIdx: binary.BigEndian.Uint32(mem[16:20]),
-			Size:       binary.BigEndian.Uint32(mem[20:24]),
-		}
-	} else {
-		ret = PktBuf{
-			BufAddrPhy: uintptr(binary.LittleEndian.Uint64(mem[:8])),
-			Mempool:    (*Mempool)(unsafe.Pointer(uintptr(binary.LittleEndian.Uint64(mem[8:16])))),
-			MempoolIdx: binary.LittleEndian.Uint32(mem[16:20]),
-			Size:       binary.LittleEndian.Uint32(mem[20:24]),
-		}
-	}
-	ret.HeadRoom = hdr
-	ret.Data = mem[lenWoData : len(mem)-lenWoData]
-	return &ret
-}
-
-//setPktBuf writes the content of the PktBuf into the slice mem
-func setPktBuf(mem []byte, pbuf *PktBuf) {
-	lenWoData := 24 + sizePktBufHeadroom
-	if isBig {
-		binary.BigEndian.PutUint64(mem[:8], uint64(pbuf.BufAddrPhy))
-		binary.BigEndian.PutUint64(mem[8:16], uint64(uintptr(unsafe.Pointer(pbuf.Mempool))))
-		binary.BigEndian.PutUint32(mem[16:20], pbuf.MempoolIdx)
-		binary.BigEndian.PutUint32(mem[20:24], pbuf.Size)
-	} else {
-		binary.LittleEndian.PutUint64(mem[:8], uint64(pbuf.BufAddrPhy))
-		binary.LittleEndian.PutUint64(mem[8:16], uint64(uintptr(unsafe.Pointer(pbuf.Mempool))))
-		binary.LittleEndian.PutUint32(mem[16:20], pbuf.MempoolIdx)
-		binary.LittleEndian.PutUint32(mem[20:24], pbuf.Size)
-	}
-	copy(mem[24:lenWoData], pbuf.HeadRoom[:])
-	copy(mem[lenWoData:lenWoData+len(pbuf.Data)], pbuf.Data)
-}
-
-//pktBufToByteSlice takes a PacketBuffer and returns a []byte that conforms to the needs of the NIC
-/*func pktBufToByteSlice(pbuf PktBuf) []byte {
-	lenWoData := 24 + sizePktBufHeadroom
-	ret := make([]byte, lenWoData+len(pbuf.Data))
-	if isBig {
-		binary.BigEndian.PutUint64(ret[:8], uint64(pbuf.BufAddrPhy))
-		binary.BigEndian.PutUint64(ret[8:16], uint64(uintptr(unsafe.Pointer(pbuf.Mempool))))
-		binary.BigEndian.PutUint32(ret[16:20], pbuf.MempoolIdx)
-		binary.BigEndian.PutUint32(ret[20:24], pbuf.Size)
-	} else {
-		binary.LittleEndian.PutUint64(ret[:8], uint64(pbuf.BufAddrPhy))
-		binary.LittleEndian.PutUint64(ret[8:16], uint64(uintptr(unsafe.Pointer(pbuf.Mempool))))
-		binary.LittleEndian.PutUint32(ret[16:20], pbuf.MempoolIdx)
-		binary.LittleEndian.PutUint32(ret[20:24], pbuf.Size)
-	}
-	copy(ret[24:lenWoData], pbuf.HeadRoom[:])
-	copy(ret[lenWoData:lenWoData+len(pbuf.Data)], pbuf.Data)
-	return ret
-}
-
-//if raw is not a valid PktBuf the result will be undefined garbage values
-func byteSliceToPktBuf(raw []byte) *PktBuf {
-	lenWoData := 24 + sizePktBufHeadroom
-	var hdr [sizePktBufHeadroom]uint8
-	data := make([]byte, len(raw)-lenWoData) //allocate new array so it doesn't point so the underlying values, though I'm not sure if that would be the correct choice in this case -> will be bad on the performance
-	copy(hdr[:], raw[24:lenWoData])
-	copy(data[:], raw[lenWoData:len(raw)])
-	var ret PktBuf
-	if isBig {
-		ret = PktBuf{
-			BufAddrPhy: uintptr(binary.BigEndian.Uint64(raw[:8])),
-			Mempool:    (*Mempool)(unsafe.Pointer(uintptr(binary.BigEndian.Uint64(raw[8:16])))),
-			MempoolIdx: binary.BigEndian.Uint32(raw[16:20]),
-			Size:       binary.BigEndian.Uint32(raw[20:24]),
-		}
-	} else {
-		ret = PktBuf{
-			BufAddrPhy: uintptr(binary.LittleEndian.Uint64(raw[:8])),
-			Mempool:    (*Mempool)(unsafe.Pointer(uintptr(binary.LittleEndian.Uint64(raw[8:16])))),
-			MempoolIdx: binary.LittleEndian.Uint32(raw[16:20]),
-			Size:       binary.LittleEndian.Uint32(raw[20:24]),
-		}
-	}
-	ret.HeadRoom = hdr
-	ret.Data = data
-	return &ret
-}
-*/
+//type dmaMemory struct {
+//	virt []byte
+//	phy  uintptr
+//}
 
 func virtToPhys(virt uintptr) uintptr {
 	pagesize := syscall.Getpagesize()
@@ -163,7 +69,7 @@ func virtToPhys(virt uintptr) uintptr {
 
 // allocate memory suitable for DMA access in huge pages
 // this requires hugetlbfs to be mounted at /mnt/huge
-func memoryAllocateDma(size uint32, requireContiguous bool) dmaMemory {
+func memoryAllocateDma(size uint32, requireContiguous bool) ([]byte, uintptr) { //maybe change so we don't have to return a struct butinstead return 2 values
 	//round up to multiples of 2 MB if necessary, this is the wasteful part
 	if size%hugePageSize != 0 {
 		size = ((size >> hugePageBits) + 1) << hugePageBits
@@ -199,7 +105,7 @@ func memoryAllocateDma(size uint32, requireContiguous bool) dmaMemory {
 	syscall.Unlink(path)
 	//virt is a slice, phys a pointer -> extract Slice pointer for translation
 	//hdr := (*reflect.SliceHeader)(unsafe.Pointer(&mmap))
-	return dmaMemory{mmap, virtToPhys(uintptr(unsafe.Pointer(&mmap[0])))}
+	return mmap, virtToPhys(uintptr(unsafe.Pointer(&mmap[0])))
 }
 
 //MemoryAllocateMempool allocate mempool with numEntries*entrySize
@@ -216,10 +122,10 @@ func MemoryAllocateMempool(numEntries, entrySize uint32) *Mempool {
 	if hugePageSize%entrySize != 0 {
 		log.Fatalf("entry size must be a divisor of the huge page size (%v)", hugePageSize)
 	}
-	mem := memoryAllocateDma(numEntries*entrySize, false)
+	memvirt, _ := memoryAllocateDma(numEntries*entrySize, false)
 	fStack := make([]uint32, numEntries)
-	mempool := Mempool{
-		buf:          mem.virt,
+	mempool := &Mempool{
+		buf:          memvirt,
 		bufSize:      entrySize,
 		numEntries:   numEntries,
 		freeStackTop: numEntries,
@@ -227,15 +133,20 @@ func MemoryAllocateMempool(numEntries, entrySize uint32) *Mempool {
 	}
 	for i := uint32(0); i < numEntries; i++ {
 		mempool.freeStack[i] = i
-		//idea: get pointer of the byte array and interpret as PktBuf
-		buf := new(PktBuf) //(*PktBuf)(unsafe.Pointer(&mempool.buf[(i * entrySize) /*:((i + 1) * entrySize)*/]))
-		buf.BufAddrPhy = virtToPhys(uintptr(unsafe.Pointer(buf)))
-		buf.MempoolIdx = i
-		buf.Mempool = &mempool
-		buf.Size = 0
-		setPktBuf(mempool.buf[(i*entrySize):((i+1)*entrySize)], buf)
+		pBufStart := i * entrySize
+		if isBig {
+			binary.BigEndian.PutUint64(mempool.buf[pBufStart:pBufStart+8], uint64(virtToPhys(uintptr(unsafe.Pointer(&mempool.buf[i*entrySize])))))
+			binary.BigEndian.PutUint64(mempool.buf[pBufStart+8:pBufStart+16], uint64(uintptr(unsafe.Pointer(mempool))))
+			binary.BigEndian.PutUint32(mempool.buf[pBufStart+16:pBufStart+20], i)
+			binary.BigEndian.PutUint32(mempool.buf[pBufStart+20:pBufStart+24], 0)
+		} else {
+			binary.LittleEndian.PutUint64(mempool.buf[pBufStart:pBufStart+8], uint64(virtToPhys(uintptr(unsafe.Pointer(&mempool.buf[i*entrySize])))))
+			binary.LittleEndian.PutUint64(mempool.buf[pBufStart+8:pBufStart+16], uint64(uintptr(unsafe.Pointer(mempool))))
+			binary.LittleEndian.PutUint32(mempool.buf[pBufStart+16:pBufStart+20], i)
+			binary.LittleEndian.PutUint32(mempool.buf[pBufStart+20:pBufStart+24], 0)
+		}
 	}
-	return &mempool
+	return mempool
 }
 
 //PktBufAllocBatch allocates a batch of packets in the mempool
@@ -249,7 +160,6 @@ func PktBufAllocBatch(mempool *Mempool, bufs [][]byte) uint32 {
 		entryID := mempool.freeStack[mempool.freeStackTop-1]
 		mempool.freeStackTop--
 		bufs[i] = mempool.buf[entryID*mempool.bufSize : (entryID+1)*mempool.bufSize]
-		/*bufs[i] = (*PktBuf)(unsafe.Pointer(uintptr(unsafe.Pointer(&mempool.buf[0])) + uintptr(entryID)*uintptr(mempool.bufSize)))*/
 	}
 	return numBufs
 }
@@ -263,8 +173,6 @@ func PktBufAlloc(mempool *Mempool) [][]byte {
 
 //PktBufFree frees PktBuf
 func PktBufFree(buf []byte) {
-	//pbuf := readPktBuf(buf)
-	//mempool := pbuf.Mempool
 	var mempool *Mempool
 	if isBig {
 		mempool = (*Mempool)(unsafe.Pointer(uintptr(binary.BigEndian.Uint64(buf[8:16]))))

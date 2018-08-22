@@ -33,7 +33,7 @@ type ixgbeRxQueue struct {
 	mempool          *Mempool
 	numEntries       uint16
 	rxIndex          uint16
-	virtualAddresses [][]byte //[]*PktBuf		//experimental
+	virtualAddresses [][]byte
 }
 
 type ixgbeTxQueue struct {
@@ -41,33 +41,33 @@ type ixgbeTxQueue struct {
 	numEntries       uint16
 	cleanIndex       uint16
 	txIndex          uint16
-	virtualAddresses [][]byte //[]*PktBuf
+	virtualAddresses [][]byte
 }
 
 func (dev *ixgbeDevice) getIxyDev() IxyDevice {
 	return dev.ixy
 }
 
-// see section 4.6.4
+//see section 4.6.4
 func (dev *ixgbeDevice) initLink() {
-	// should already be set by the eeprom config, maybe we shouldn't override it here to support weirdo nics?
+	//should already be set by the eeprom config, maybe we shouldn't override it here to support weirdo nics?
 	setReg32(dev.addr, IXGBE_AUTOC, (getReg32(dev.addr, IXGBE_AUTOC)&^IXGBE_AUTOC_LMS_MASK)|IXGBE_AUTOC_LMS_10G_SERIAL)
 	setReg32(dev.addr, IXGBE_AUTOC, (getReg32(dev.addr, IXGBE_AUTOC)&^IXGBE_AUTOC_10G_PMA_PMD_MASK)|IXGBE_AUTOC_10G_XAUI)
-	// negotiate link
+	//negotiate link
 	setFlags32(dev.addr, IXGBE_AUTOC, IXGBE_AUTOC_AN_RESTART)
-	// datasheet wants us to wait for the link here, but we can continue and wait afterwards
+	//datasheet wants us to wait for the link here, but we can continue and wait afterwards
 }
 
 func (dev *ixgbeDevice) startRxQueue(queueID int) {
 	//debug info
 	fmt.Printf("starting rx queue %v\n", queueID)
 	queue := &dev.rxQueues[queueID]
-	// 2048 as pktbuf size is strictly speaking incorrect:
-	// we need a few headers (1 cacheline), so there's only 1984 bytes left for the device
-	// but the 82599 can only handle sizes in increments of 1 kb; but this is fine since our max packet size
-	// is the default MTU of 1518
-	// this has to be fixed if jumbo frames are to be supported
-	// mempool should be >= the number of rx and tx descriptors for a forwarding application
+	//2048 as pktbuf size is strictly speaking incorrect:
+	//we need a few headers (1 cacheline), so there's only 1984 bytes left for the device
+	//but the 82599 can only handle sizes in increments of 1 kb; but this is fine since our max packet size
+	//is the default MTU of 1518
+	//this has to be fixed if jumbo frames are to be supported
+	//mempool should be >= the number of rx and tx descriptors for a forwarding application
 	mempoolEntries := uint32(numRxQueueEntries + numTxQueueEntries)
 	if mempoolEntries < 4096 {
 		mempoolEntries = 4096
@@ -123,12 +123,12 @@ func (dev *ixgbeDevice) initRx() {
 	//make sure that rx is disabled while re-configuring it
 	//the datasheet also wants us to disable some crypto-offloading related rx paths (but we don't care about them)
 	clearFlags32(dev.addr, IXGBE_RXCTRL, IXGBE_RXCTRL_RXEN)
-	// no fancy dcb or vt, just a single 128kb packet buffer for us
+	//no fancy dcb or vt, just a single 128kb packet buffer for us
 	setReg32(dev.addr, IXGBE_RXPBSIZE(0), IXGBE_RXPBSIZE_128KB)
 	for i := 1; i < 8; i++ {
 		setReg32(dev.addr, IXGBE_RXPBSIZE(i), 0)
 	}
-	// always enable CRC offloading
+	//always enable CRC offloading
 	setFlags32(dev.addr, IXGBE_HLREG0, IXGBE_HLREG0_RXCRCSTRP)
 	setFlags32(dev.addr, IXGBE_RDRXCTL, IXGBE_RDRXCTL_CRCSTRIP)
 
@@ -145,20 +145,20 @@ func (dev *ixgbeDevice) initRx() {
 		setFlags32(dev.addr, IXGBE_SRRCTL(int(i)), IXGBE_SRRCTL_DROP_EN) //todo: maybe look into it
 		//setup descriptor ring, see section 7.1.9
 		ringSizeBytes := uint32(numRxQueueEntries * 16) //unsafe.Sizeof([16]byte or IxgbeAdvRxDesc)
-		mem := memoryAllocateDma(ringSizeBytes, true)
+		memvirt, memphy := memoryAllocateDma(ringSizeBytes, true)
 		//neat trick from Snabb: initialize 0xFF to prevent rogue memory accesses on premature DMA activation
 		//copy memory -> fill in log(n) compared to iterating (even with optimization this is faster)
-		if len(mem.virt) != 0 {
-			mem.virt[0] = 0xFF
+		if len(memvirt) != 0 {
+			memvirt[0] = 0xFF
 		}
-		for filled := 1; filled < len(mem.virt); filled *= 2 {
-			copy(mem.virt[filled:], mem.virt[:filled])
+		for filled := 1; filled < len(memvirt); filled *= 2 {
+			copy(memvirt[filled:], memvirt[:filled])
 		}
-		setReg32(dev.addr, IXGBE_RDBAL(int(i)), uint32(mem.phy&0xFFFFFFFF))
-		setReg32(dev.addr, IXGBE_RDBAH(int(i)), uint32(mem.phy>>32))
+		setReg32(dev.addr, IXGBE_RDBAL(int(i)), uint32(memphy&0xFFFFFFFF))
+		setReg32(dev.addr, IXGBE_RDBAH(int(i)), uint32(memphy>>32))
 		setReg32(dev.addr, IXGBE_RDLEN(int(i)), ringSizeBytes)
-		fmt.Printf("rx ring %v phy addr: %+#v\n", i, mem.phy)
-		fmt.Printf("rx ring %v virt addr: %+#v\n", i, uintptr(unsafe.Pointer(&mem.virt[0])))
+		fmt.Printf("rx ring %v phy addr: %+#v\n", i, memphy)
+		fmt.Printf("rx ring %v virt addr: %+#v\n", i, uintptr(unsafe.Pointer(&memvirt[0])))
 		//set ring to empty at start
 		setReg32(dev.addr, IXGBE_RDH(int(i)), 0)
 		setReg32(dev.addr, IXGBE_RDT(int(i)), 0)
@@ -168,14 +168,14 @@ func (dev *ixgbeDevice) initRx() {
 		queue.virtualAddresses = make([][]byte, queue.numEntries)
 		queue.rxIndex = 0
 		/*
-			we have the []byte mem.virt. That's where the packet descriptors (IxgbeAdvRxDesc) will be
+			we have the []byte memvirt. That's where the packet descriptors (IxgbeAdvRxDesc) will be
 			-> find a way so we get an []IxgbeAdvDesc that uses the same memory area
 		*/
-		//original: queue->descriptors = (union ixgbe_adv_tx_desc*) mem.virt;
-		//divide mem.virt into len(mem.virt)/16=numRxQueueEntries subslices and collect them in a slice
+		//original: queue->descriptors = (union ixgbe_adv_tx_desc*) memvirt;
+		//divide memvirt into len(memvirt)/16=numRxQueueEntries subslices and collect them in a slice
 		desc := make([]IxgbeAdvRxDesc, numRxQueueEntries)
 		for j := 0; j < numRxQueueEntries; j++ {
-			desc[j] = IxgbeAdvRxDesc{raw: mem.virt[j*16 : (j+1)*16]} //creating subslices should be not too inefficient since they all use the same underlying array (what we want ayways)
+			desc[j] = IxgbeAdvRxDesc{raw: memvirt[j*16 : (j+1)*16]} //creating subslices should be not too inefficient since they all use the same underlying array (what we want ayways)
 		}
 		queue.descriptors = desc
 	}
@@ -212,18 +212,18 @@ func (dev *ixgbeDevice) initTx() {
 
 		//setup descriptor ring, see section 7.1.9
 		ringSizeBytes := uint32(numTxQueueEntries * 16) //see initRx
-		mem := memoryAllocateDma(ringSizeBytes, true)
-		if len(mem.virt) != 0 {
-			mem.virt[0] = 0xFF
+		memvirt, memphy := memoryAllocateDma(ringSizeBytes, true)
+		if len(memvirt) != 0 {
+			memvirt[0] = 0xFF
 		}
-		for filled := 1; filled < len(mem.virt); filled *= 2 {
-			copy(mem.virt[filled:], mem.virt[:filled])
+		for filled := 1; filled < len(memvirt); filled *= 2 {
+			copy(memvirt[filled:], memvirt[:filled])
 		}
-		setReg32(dev.addr, IXGBE_TDBAL(int(i)), uint32(mem.phy&0xFFFFFFFF))
-		setReg32(dev.addr, IXGBE_TDBAH(int(i)), uint32(mem.phy>>32))
+		setReg32(dev.addr, IXGBE_TDBAL(int(i)), uint32(memphy&0xFFFFFFFF))
+		setReg32(dev.addr, IXGBE_TDBAH(int(i)), uint32(memphy>>32))
 		setReg32(dev.addr, IXGBE_TDLEN(int(i)), ringSizeBytes)
-		fmt.Printf("tx ring %v phy addr: %+#v\n", i, mem.phy)
-		fmt.Printf("tx ring %v virt addr: %+#v\n", i, uintptr(unsafe.Pointer(&mem.virt[0])))
+		fmt.Printf("tx ring %v phy addr: %+#v\n", i, memphy)
+		fmt.Printf("tx ring %v virt addr: %+#v\n", i, uintptr(unsafe.Pointer(&memvirt[0])))
 
 		//descriptor writeback magic values, important to get good performance and low PCIe overhead
 		//see 7.2.3.4.1 and 7.2.3.5 for an explanation of these values and how to find good ones
@@ -240,9 +240,9 @@ func (dev *ixgbeDevice) initTx() {
 		queue.numEntries = numTxQueueEntries
 		queue.virtualAddresses = make([][]byte, queue.numEntries)
 		//see rxInit
-		desc := make([]IxgbeAdvTxDesc, len(mem.virt)/16)
-		for j := 0; j < len(mem.virt)/16; j++ {
-			desc[j] = IxgbeAdvTxDesc{raw: mem.virt[j*16 : (j+1)*16]}
+		desc := make([]IxgbeAdvTxDesc, len(memvirt)/16)
+		for j := 0; j < len(memvirt)/16; j++ {
+			desc[j] = IxgbeAdvTxDesc{raw: memvirt[j*16 : (j+1)*16]}
 		}
 		queue.descriptors = desc
 	}
