@@ -29,8 +29,8 @@ func enableDma(pciAddr string) {
 	if err != nil {
 		log.Fatalf("Error opening pci config: %v", err)
 	}
-	// write to the command register (offset 4) in the PCIe config space
-	// bit 2 is "bus master enable", see PCIe 3.0 specification section 7.5.1.1
+	//write to the command register (offset 4) in the PCIe config space
+	//bit 2 is "bus master enable", --see PCIe 3.0 specification section 7.5.1.1-- see datasheet section 9.3.3.3
 	dma := make([]byte, 2)
 	_, err = fd.ReadAt(dma, 4)
 	if err != nil {

@@ -843,6 +843,28 @@ const (
 	IXGBE_LINK_SPEED_82599_AUTONEG        = IXGBE_LINK_SPEED_100_FULL | IXGBE_LINK_SPEED_1GB_FULL | IXGBE_LINK_SPEED_10GB_FULL
 )
 
+/* Statistics Registers */
+const (
+	IXGBE_RXNFGPC     = 0x041B0
+	IXGBE_RXNFGBCL    = 0x041B4
+	IXGBE_RXNFGBCH    = 0x041B8
+	IXGBE_RXDGPC      = 0x02F50
+	IXGBE_RXDGBCL     = 0x02F54
+	IXGBE_RXDGBCH     = 0x02F58
+	IXGBE_RXDDGPC     = 0x02F5C
+	IXGBE_RXDDGBCL    = 0x02F60
+	IXGBE_RXDDGBCH    = 0x02F64
+	IXGBE_RXLPBKGPC   = 0x02F68
+	IXGBE_RXLPBKGBCL  = 0x02F6C
+	IXGBE_RXLPBKGBCH  = 0x02F70
+	IXGBE_RXDLPBKGPC  = 0x02F74
+	IXGBE_RXDLPBKGBCL = 0x02F78
+	IXGBE_RXDLPBKGBCH = 0x02F7C
+	IXGBE_TXDGPC      = 0x087A0
+	IXGBE_TXDGBCL     = 0x087A4
+	IXGBE_TXDGBCH     = 0x087A8
+)
+
 //enum: const ( a = iota \n b = iota ...)
 
 //"As Go doesn't have support for C's union type in the general case, C's union types are represented as a Go byte array with the same length."

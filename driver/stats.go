@@ -7,8 +7,8 @@ import (
 
 //DeviceStats holds stats
 type DeviceStats struct {
-	device                                 IxyInterface
-	rxPackets, txPackets, rxBytes, txBytes uint64
+	device IxyInterface
+	rxPackets, txPackets, rxBytes, txBytes/*, rxDmaPackets*/ uint64
 }
 
 //PrintStats prints stats
@@ -45,6 +45,7 @@ func (stats *DeviceStats) PrintStatsDiff(statsOld *DeviceStats, nanos time.Durat
 		addr = "???"
 	}
 	fmt.Printf("[%v] RX: %v Mbit/s %.2f Mpps\n", addr, diffMbit(stats.rxBytes, statsOld.rxBytes, stats.rxPackets, statsOld.rxPackets, nanos), diffMpps(stats.rxPackets, statsOld.rxPackets, nanos))
+	//fmt.Printf("[%v] DMA Good Packets: %v\n", addr, stats.rxDmaPackets)
 	if stats.device != nil {
 		addr = newDev.PciAddr
 	} else {
@@ -61,6 +62,7 @@ func (stats *DeviceStats) StatsInit(dev IxyInterface) {
 	stats.txPackets = 0
 	stats.rxBytes = 0
 	stats.txBytes = 0
+	//stats.rxDmaPackets = 0
 	stats.device = dev
 	if dev != nil {
 		dev.ReadStats(nil) //Todo: implementieren und package importieren

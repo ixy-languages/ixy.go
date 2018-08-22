@@ -83,10 +83,16 @@ func (dev *ixgbeDevice) startRxQueue(queueID int) {
 		if buf == nil {
 			log.Fatal("failed to allocate rx descriptor")
 		}
-		//write into first 64 bits
-		copy(rxd.raw[:8], buf[:8])
-		//write into last 64 bits
-		binary.LittleEndian.PutUint64(rxd.raw[8:], uint64(0))
+		//copy(rxd.raw[:8], buf[:8])	//alarm
+		if isBig {
+			//write into first 64 bits
+			binary.BigEndian.PutUint64(rxd.raw[:8], binary.BigEndian.Uint64(buf[:8])+64) //get phys addr AND ADD OFFSET!!!
+			//write into last 64 bits
+			binary.BigEndian.PutUint64(rxd.raw[8:], uint64(0))
+		} else {
+			binary.LittleEndian.PutUint64(rxd.raw[:8], binary.LittleEndian.Uint64(buf[:8])+64)
+			binary.LittleEndian.PutUint64(rxd.raw[8:], uint64(0))
+		}
 		queue.virtualAddresses[i] = buf
 	}
 	//enable queue and wait if necessary
@@ -136,7 +142,7 @@ func (dev *ixgbeDevice) initRx() {
 		setReg32(dev.addr, IXGBE_SRRCTL(int(i)), (getReg32(dev.addr, IXGBE_SRRCTL(int(i)))&^IXGBE_SRRCTL_DESCTYPE_MASK)|IXGBE_SRRCTL_DESCTYPE_ADV_ONEBUF)
 		//drop_en causes the nic to drop packets if no rx descriptors are available instead of buffering them
 		//a single overflowing queue can fill up the whole buffer and impact operations if not setting this flag
-		setFlags32(dev.addr, IXGBE_SRRCTL(int(i)), IXGBE_SRRCTL_DROP_EN)
+		setFlags32(dev.addr, IXGBE_SRRCTL(int(i)), IXGBE_SRRCTL_DROP_EN) //todo: maybe look into it
 		//setup descriptor ring, see section 7.1.9
 		ringSizeBytes := uint32(numRxQueueEntries * 16) //unsafe.Sizeof([16]byte or IxgbeAdvRxDesc)
 		mem := memoryAllocateDma(ringSizeBytes, true)
@@ -168,8 +174,8 @@ func (dev *ixgbeDevice) initRx() {
 		//original: queue->descriptors = (union ixgbe_adv_tx_desc*) mem.virt;
 		//divide mem.virt into len(mem.virt)/16=numRxQueueEntries subslices and collect them in a slice
 		desc := make([]IxgbeAdvRxDesc, numRxQueueEntries)
-		for i := 0; i < numRxQueueEntries; i++ {
-			desc[i] = IxgbeAdvRxDesc{raw: mem.virt[i*16 : (i+1)*16]} //creating subslices should be not too inefficient since they all use the same underlying array (what we want ayways)
+		for j := 0; j < numRxQueueEntries; j++ {
+			desc[j] = IxgbeAdvRxDesc{raw: mem.virt[j*16 : (j+1)*16]} //creating subslices should be not too inefficient since they all use the same underlying array (what we want ayways)
 		}
 		queue.descriptors = desc
 	}
@@ -201,7 +207,7 @@ func (dev *ixgbeDevice) initTx() {
 	clearFlags32(dev.addr, IXGBE_RTTDCS, IXGBE_RTTDCS_ARBDIS)
 
 	//per-queue config for all queues
-	for i := 0; uint16(i) < dev.ixy.NumTxQueues; i++ {
+	for i := uint16(0); i < dev.ixy.NumTxQueues; i++ {
 		fmt.Printf("initializing tx queue %v\n", i)
 
 		//setup descriptor ring, see section 7.1.9
@@ -213,21 +219,21 @@ func (dev *ixgbeDevice) initTx() {
 		for filled := 1; filled < len(mem.virt); filled *= 2 {
 			copy(mem.virt[filled:], mem.virt[:filled])
 		}
-		setReg32(dev.addr, IXGBE_TDBAL(i), uint32(mem.phy&0xFFFFFFFF))
-		setReg32(dev.addr, IXGBE_TDBAH(i), uint32(mem.phy>>32))
-		setReg32(dev.addr, IXGBE_TDLEN(i), ringSizeBytes)
+		setReg32(dev.addr, IXGBE_TDBAL(int(i)), uint32(mem.phy&0xFFFFFFFF))
+		setReg32(dev.addr, IXGBE_TDBAH(int(i)), uint32(mem.phy>>32))
+		setReg32(dev.addr, IXGBE_TDLEN(int(i)), ringSizeBytes)
 		fmt.Printf("tx ring %v phy addr: %+#v\n", i, mem.phy)
 		fmt.Printf("tx ring %v virt addr: %+#v\n", i, uintptr(unsafe.Pointer(&mem.virt[0])))
 
 		//descriptor writeback magic values, important to get good performance and low PCIe overhead
 		//see 7.2.3.4.1 and 7.2.3.5 for an explanation of these values and how to find good ones
 		//we just use the defaults from DPDK here, but this is a potentially interesting point for optimizations
-		txdctl := getReg32(dev.addr, IXGBE_TXDCTL(i))
+		txdctl := getReg32(dev.addr, IXGBE_TXDCTL(int(i)))
 		//there are no defines for this in ixgbe_h for some reason
 		//pthresh: 6:0, hthresh: 14:8, wthresh: 22:16
 		txdctl &= ^(uint32(0x3F | (0x3F << 8) | (0x3F << 16))) //clear bits
 		txdctl |= (36 | (8 << 8) | (4 << 16))                  //from DPDK
-		setReg32(dev.addr, IXGBE_TXDCTL(i), txdctl)
+		setReg32(dev.addr, IXGBE_TXDCTL(int(i)), txdctl)
 
 		//private data for the driver, 0-initialized
 		queue := &dev.txQueues[i]
@@ -235,8 +241,8 @@ func (dev *ixgbeDevice) initTx() {
 		queue.virtualAddresses = make([][]byte, queue.numEntries)
 		//see rxInit
 		desc := make([]IxgbeAdvTxDesc, len(mem.virt)/16)
-		for i := 0; i < len(mem.virt)/16; i++ {
-			desc[i] = IxgbeAdvTxDesc{raw: mem.virt[i*16 : (i+1)*16]}
+		for j := 0; j < len(mem.virt)/16; j++ {
+			desc[j] = IxgbeAdvTxDesc{raw: mem.virt[j*16 : (j+1)*16]}
 		}
 		queue.descriptors = desc
 	}
@@ -258,7 +264,7 @@ func (dev *ixgbeDevice) waitForLink() {
 //see section 4.6.3
 func (dev *ixgbeDevice) resetAndInit() {
 	fmt.Printf("Resetting device %v\n", dev.ixy.PciAddr)
-	//section 4.6.3.1
+	//section 4.6.3.1 - disable all interrupts
 	setReg32(dev.addr, IXGBE_EIMC, 0x7FFFFFFF)
 
 	//section 4.6.3.2
@@ -279,6 +285,10 @@ func (dev *ixgbeDevice) resetAndInit() {
 
 	//section 4.6.4 - initialize link (auto negotiation)
 	dev.initLink()
+
+	//section 4.6.5 - statistical counters
+	//reset-on-read registers, just read them once
+	dev.ReadStats(nil)
 
 	//section 4.6.7 - init rx
 	dev.initRx()
@@ -359,14 +369,17 @@ func (dev *ixgbeDevice) ReadStats(stats *DeviceStats) {
 	txPkts := getReg32(dev.addr, IXGBE_GPTC)
 	rxBytes := uint64(getReg32(dev.addr, IXGBE_GORCL)) | uint64(getReg32(dev.addr, IXGBE_GORCH))<<32
 	txBytes := uint64(getReg32(dev.addr, IXGBE_GOTCL)) | uint64(getReg32(dev.addr, IXGBE_GOTCH))<<32
+	//rxDmaPkts := getReg32(dev.addr, IXGBE_RXDGPC)
 	if stats != nil {
 		stats.rxPackets += uint64(rxPkts)
 		stats.txPackets += uint64(txPkts)
 		stats.rxBytes += rxBytes
 		stats.txBytes += txBytes
+		//stats.rxDmaPackets += uint64(rxDmaPkts)
 	}
 }
 
+//advance index with wrap-around, this is the reason why we require a power of two for the queue size
 func wrapRing(index, ringSize uint16) uint16 {
 	return (index + 1) & (ringSize - 1)
 }
@@ -391,6 +404,9 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 		} else {
 			status = binary.LittleEndian.Uint32(descPtr[8:12])
 		}
+		//print descriptor in order to campare it to the c implementation
+		//fmt.Printf("descriptor:\n%v\n", descPtr)
+		//done
 		if status&IXGBE_RXDADV_STAT_DD != 0 {
 			if status&IXGBE_RXDADV_STAT_EOP == 0 {
 				log.Fatal("multi-segment packets are not supported - increase buffer size or decrease MTU")
@@ -400,10 +416,8 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 			copy(desc, descPtr)
 			buf := queue.virtualAddresses[rxIndex]
 			if isBig {
-				//buf.Size = uint32(binary.BigEndian.Uint16(desc[12:14])) //bit 96 - 111 of the advanced rx recieve descriptor are the length
-				binary.BigEndian.PutUint32(buf[20:24], uint32(binary.BigEndian.Uint16(desc[12:14])))
+				binary.BigEndian.PutUint32(buf[20:24], uint32(binary.BigEndian.Uint16(desc[12:14]))) //bit 96 - 111 of the advanced rx recieve descriptor are the length
 			} else {
-				//buf.Size = uint32(binary.LittleEndian.Uint16(desc[12:14]))
 				binary.LittleEndian.PutUint32(buf[20:24], uint32(binary.LittleEndian.Uint16(desc[12:14])))
 			}
 			//this would be the place to implement RX offloading by translating the device-specific flags
