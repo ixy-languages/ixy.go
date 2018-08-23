@@ -24,7 +24,7 @@ func (stats *DeviceStats) PrintStats() {
 	fmt.Printf("[%v] TX: %v bytes %v packets\n", addr, stats.txBytes, stats.txPackets)
 }
 
-func diffMpps(pktsNew, pktsOld uint64, nanos time.Duration) float64 { //get duration by start := time.Now();t := time.Now();elapsed := t.Sub(start)
+func diffMpps(pktsNew, pktsOld uint64, nanos time.Duration) float64 {
 	return float64(pktsNew-pktsOld) / 1000000.0 / (float64(nanos) / 1000000000.0)
 }
 
@@ -65,6 +65,6 @@ func (stats *DeviceStats) StatsInit(dev IxyInterface) {
 	//stats.rxDmaPackets = 0
 	stats.device = dev
 	if dev != nil {
-		dev.ReadStats(nil) //Todo: implementieren und package importieren
+		dev.ReadStats(nil)
 	}
 }

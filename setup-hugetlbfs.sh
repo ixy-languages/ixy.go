@@ -1,4 +1,4 @@
- #!/bin/bash
+#!/bin/bash
 mkdir -p /mnt/huge
 (mount | grep /mnt/huge) > /dev/null || mount -t hugetlbfs hugetlbfs /mnt/huge
 for i in {0..7}

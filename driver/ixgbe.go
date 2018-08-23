@@ -59,7 +59,6 @@ func (dev *ixgbeDevice) initLink() {
 }
 
 func (dev *ixgbeDevice) startRxQueue(queueID int) {
-	//debug info
 	fmt.Printf("starting rx queue %v\n", queueID)
 	queue := &dev.rxQueues[queueID]
 	//2048 as pktbuf size is strictly speaking incorrect:
@@ -79,14 +78,13 @@ func (dev *ixgbeDevice) startRxQueue(queueID int) {
 	for i := uint16(0); i < queue.numEntries; i++ {
 		//rxd is the struct that contains only the array raw
 		rxd := queue.descriptors[i]
-		buf := PktBufAlloc(queue.mempool)[0]
+		buf := PktBufAlloc(queue.mempool)
 		if buf == nil {
 			log.Fatal("failed to allocate rx descriptor")
 		}
-		//copy(rxd.raw[:8], buf[:8])	//alarm
 		if isBig {
 			//write into first 64 bits
-			binary.BigEndian.PutUint64(rxd.raw[:8], binary.BigEndian.Uint64(buf[:8])+64) //get phys addr AND ADD OFFSET!!!
+			binary.BigEndian.PutUint64(rxd.raw[:8], binary.BigEndian.Uint64(buf[:8])+64)
 			//write into last 64 bits
 			binary.BigEndian.PutUint64(rxd.raw[8:], uint64(0))
 		} else {
@@ -113,7 +111,7 @@ func (dev *ixgbeDevice) startTxQueue(queueID int) {
 	//tx queue starts out empty
 	setReg32(dev.addr, IXGBE_TDH(queueID), 0)
 	setReg32(dev.addr, IXGBE_TDT(queueID), 0)
-	// enable queue and wait if necessary
+	//enable queue and wait if necessary
 	setFlags32(dev.addr, IXGBE_TXDCTL(queueID), IXGBE_TXDCTL_ENABLE)
 	waitSetReg32(dev.addr, IXGBE_TXDCTL(queueID), IXGBE_TXDCTL_ENABLE)
 }
@@ -142,7 +140,7 @@ func (dev *ixgbeDevice) initRx() {
 		setReg32(dev.addr, IXGBE_SRRCTL(int(i)), (getReg32(dev.addr, IXGBE_SRRCTL(int(i)))&^IXGBE_SRRCTL_DESCTYPE_MASK)|IXGBE_SRRCTL_DESCTYPE_ADV_ONEBUF)
 		//drop_en causes the nic to drop packets if no rx descriptors are available instead of buffering them
 		//a single overflowing queue can fill up the whole buffer and impact operations if not setting this flag
-		setFlags32(dev.addr, IXGBE_SRRCTL(int(i)), IXGBE_SRRCTL_DROP_EN) //todo: maybe look into it
+		setFlags32(dev.addr, IXGBE_SRRCTL(int(i)), IXGBE_SRRCTL_DROP_EN) //todo: look into it, packets seem to get dropped and I have no clue why
 		//setup descriptor ring, see section 7.1.9
 		ringSizeBytes := uint32(numRxQueueEntries * 16) //unsafe.Sizeof([16]byte or IxgbeAdvRxDesc)
 		memvirt, memphy := memoryAllocateDma(ringSizeBytes, true)
@@ -167,11 +165,6 @@ func (dev *ixgbeDevice) initRx() {
 		queue.numEntries = numRxQueueEntries
 		queue.virtualAddresses = make([][]byte, queue.numEntries)
 		queue.rxIndex = 0
-		/*
-			we have the []byte memvirt. That's where the packet descriptors (IxgbeAdvRxDesc) will be
-			-> find a way so we get an []IxgbeAdvDesc that uses the same memory area
-		*/
-		//original: queue->descriptors = (union ixgbe_adv_tx_desc*) memvirt;
 		//divide memvirt into len(memvirt)/16=numRxQueueEntries subslices and collect them in a slice
 		desc := make([]IxgbeAdvRxDesc, numRxQueueEntries)
 		for j := 0; j < numRxQueueEntries; j++ {
@@ -329,7 +322,7 @@ func ixgbeInit(pciAddr string, rxQueues, txQueues uint16) IxyInterface {
 	dev.ixy.NumRxQueues = rxQueues
 	dev.ixy.NumTxQueues = txQueues
 	dev.addr = pciMapResource(pciAddr)
-	dev.rxQueues = make([]ixgbeRxQueue, rxQueues) //todo: see if that's correct
+	dev.rxQueues = make([]ixgbeRxQueue, rxQueues)
 	dev.txQueues = make([]ixgbeTxQueue, txQueues)
 	dev.resetAndInit()
 	return dev
@@ -416,14 +409,15 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 			copy(desc, descPtr)
 			buf := queue.virtualAddresses[rxIndex]
 			if isBig {
-				binary.BigEndian.PutUint32(buf[20:24], uint32(binary.BigEndian.Uint16(desc[12:14]))) //bit 96 - 111 of the advanced rx recieve descriptor are the length
+				//bit 96 - 111 of the advanced rx recieve descriptor are the length
+				binary.BigEndian.PutUint32(buf[20:24], uint32(binary.BigEndian.Uint16(desc[12:14])))
 			} else {
 				binary.LittleEndian.PutUint32(buf[20:24], uint32(binary.LittleEndian.Uint16(desc[12:14])))
 			}
 			//this would be the place to implement RX offloading by translating the device-specific flags
 			//to an independent representation in the buf (similiar to how DPDK works)
 			//need a new mbuf for the descriptor
-			newBuf := PktBufAlloc(queue.mempool)[0] //slice has only a single element
+			newBuf := PktBufAlloc(queue.mempool)
 			if newBuf == nil {
 				//we could handle empty mempools more gracefully here, but it would be quite messy...
 				//make your mempools large enough
@@ -492,9 +486,10 @@ func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs [][]byte, numBufs uint32) u
 		txd := queue.descriptors[cleanupTo]
 		var status uint32
 		if isBig {
-			status = binary.BigEndian.Uint32(txd.raw[12:]) //last 32 bit
+			//last 32 bit
+			status = binary.BigEndian.Uint32(txd.raw[12:])
 		} else {
-			status = binary.LittleEndian.Uint32(txd.raw[12:]) //last 32 bit
+			status = binary.LittleEndian.Uint32(txd.raw[12:])
 		}
 		//hardware sets this flag as soon as it's sent out, we can give back all bufs in the batch back to the mempool
 		if status&IXGBE_ADVTXD_STAT_DD != 0 {

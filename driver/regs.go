@@ -4,7 +4,7 @@ package driver
 // {
 // 		__asm__ volatile ("" : : : "memory");
 // }
-import "C" //use cgo to ensure read as volatile does not exist in go (at least I hope that it works, if not write the whole package in C and import that in ixgbe.go)
+import "C" //use cgo to ensure read as volatile does not exist in go
 import (
 	"encoding/binary"
 	"fmt"
@@ -13,22 +13,11 @@ import (
 	"time"
 )
 
-////////////////////////////////////////////////////////////////////////////////////////////
-//TODO: memory barriers                                                                   //
-//EDIT: not necessarily a memory barrier, just make sure, that it's read (no cached value)//
-//-> only use with O_DIRECT flag                                                          //
-//otherwise: try c call                                                                   //
-//NO VOLATILE EQUIVALENT IN GO -> maybe use cgo                                           //
-////////////////////////////////////////////////////////////////////////////////////////////
-
 //https://stackoverflow.com/questions/18491032/does-go-support-volatile-non-volatile-variables
-
-//DON'T use pointer, instead unse slices -> addr will always be []byte
 
 //getter/setter for PCIe memory mapped registers
 func setReg32(addr []byte, reg int, value uint32) {
 	C.mbarrier()
-	//*(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg))) = value
 	if isBig {
 		binary.BigEndian.PutUint32(addr[reg:reg+4], value)
 	} else {
@@ -38,7 +27,6 @@ func setReg32(addr []byte, reg int, value uint32) {
 
 func getReg32(addr []byte, reg int) uint32 {
 	C.mbarrier()
-	//return *(*uint32)(unsafe.Pointer(uintptr(unsafe.Pointer(addr)) + uintptr(reg)))
 	if isBig {
 		return binary.BigEndian.Uint32(addr[reg : reg+4])
 	}
@@ -105,7 +93,6 @@ func readIo32(fd *os.File, offset uint) uint32 {
 		return binary.BigEndian.Uint32(buf[0:])
 	}
 	return binary.LittleEndian.Uint32(buf[0:])
-	//return *(*uint32)(unsafe.Pointer(&buf[0]))
 }
 
 func readIo16(fd *os.File, offset uint) uint16 {
