@@ -64,8 +64,6 @@ func pciMapResource(pciAddr string) []byte {
 		log.Fatalf("Error opening pci resource: %v", err)
 	}
 	stat, _ := fd.Stat()
-
-	//Linux syscalls
 	mmap, err := syscall.Mmap(int(fd.Fd()), 0, int(stat.Size()), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 	if err != nil {
 		log.Fatalf("Error trying to mmap: %v", err)
@@ -75,7 +73,6 @@ func pciMapResource(pciAddr string) []byte {
 
 func pciOpenResource(pciAddr string, resource string) *os.File {
 	path := fmt.Sprintf("/sys/bus/pci/devices/%v/%v", pciAddr, resource)
-	//debug information
 	fmt.Printf("Opening PCI resource at %v \n", path)
 	fd, err := os.OpenFile(path, os.O_RDWR, 0644)
 	if err != nil {

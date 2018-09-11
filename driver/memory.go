@@ -17,27 +17,18 @@ const (
 	sizePktBufHeadroom = 40
 )
 
-//PktBuf stuct that describes a packet buffer
-/*type PktBuf struct {
-	BufAddrPhy       uintptr
-	Mempool          *Mempool
-	MempoolIdx, Size uint32
-	HeadRoom         [sizePktBufHeadroom]uint8
-	Data             []byte //probably the biggest problem: Data has to be directly after HeadRoom -> doesn't work because of that
-}*/
+//PktBuf bundles the raw byte representation of a buffer with the corresponding mempool
+type PktBuf struct {
+	Pkt     []byte
+	mempool *Mempool
+}
 
 //Mempool struct that describes a mempool
 type Mempool struct {
-	buf []byte
-	//bufSize != len(buf)
+	buf                               []byte
 	bufSize, numEntries, freeStackTop uint32
 	freeStack                         []uint32
 }
-
-//type dmaMemory struct {
-//	virt []byte
-//	phy  uintptr
-//}
 
 func virtToPhys(virt uintptr) uintptr {
 	pagesize := syscall.Getpagesize()
@@ -52,7 +43,6 @@ func virtToPhys(virt uintptr) uintptr {
 		log.Fatalf("Error translating address: %v", err)
 	}
 	var phy uintptr
-	//since uintptr can technically be 4 our 8 byte we could check for that but that's probably irrelevant
 	if isBig {
 		phy = uintptr(binary.BigEndian.Uint64(rbuf))
 	} else {
@@ -65,8 +55,8 @@ func virtToPhys(virt uintptr) uintptr {
 	return (phy&0x7fffffffffffff)*uintptr(pagesize) + virt%uintptr(pagesize)
 }
 
-//allocate memory suitable for DMA access in huge pages
-//this requires hugetlbfs to be mounted at /mnt/huge
+// allocate memory suitable for DMA access in huge pages
+// this requires hugetlbfs to be mounted at /mnt/huge
 func memoryAllocateDma(size uint32, requireContiguous bool) ([]byte, uintptr) { //maybe change so we don't have to return a struct butinstead return 2 values
 	//round up to multiples of 2 MB if necessary, this is the wasteful part
 	if size%hugePageSize != 0 {
@@ -101,8 +91,6 @@ func memoryAllocateDma(size uint32, requireContiguous bool) ([]byte, uintptr) { 
 		log.Fatalf("disabling swap for DMA memory failed. Error: %v\n", err)
 	}
 	syscall.Unlink(path)
-	//virt is a slice, phys a pointer -> extract Slice pointer for translation
-	//hdr := (*reflect.SliceHeader)(unsafe.Pointer(&mmap))
 	return mmap, virtToPhys(uintptr(unsafe.Pointer(&mmap[0])))
 }
 
@@ -115,8 +103,8 @@ func MemoryAllocateMempool(numEntries, entrySize uint32) *Mempool {
 	if entrySize == 0 {
 		entrySize = 2048
 	}
-	//require entries that neatly fit into the page size, this makes the memory pool much easier
-	//otherwise our base_addr + index * size formula would be wrong because we can't cross a page-boundary
+	// require entries that neatly fit into the page size, this makes the memory pool much easier
+	// otherwise our base_addr + index * size formula would be wrong because we can't cross a page-boundary
 	if hugePageSize%entrySize != 0 {
 		log.Fatalf("entry size must be a divisor of the huge page size (%v)", hugePageSize)
 	}
@@ -133,12 +121,12 @@ func MemoryAllocateMempool(numEntries, entrySize uint32) *Mempool {
 		mempool.freeStack[i] = i
 		pBufStart := i * entrySize
 		if isBig {
-			binary.BigEndian.PutUint64(mempool.buf[pBufStart:pBufStart+8], uint64(virtToPhys(uintptr(unsafe.Pointer(&mempool.buf[pBufStart])))))
+			binary.BigEndian.PutUint64(mempool.buf[pBufStart:pBufStart+8], uint64(virtToPhys(uintptr(unsafe.Pointer(&mempool.buf[i*entrySize])))))
 			binary.BigEndian.PutUint64(mempool.buf[pBufStart+8:pBufStart+16], uint64(uintptr(unsafe.Pointer(mempool))))
 			binary.BigEndian.PutUint32(mempool.buf[pBufStart+16:pBufStart+20], i)
 			binary.BigEndian.PutUint32(mempool.buf[pBufStart+20:pBufStart+24], 0)
 		} else {
-			binary.LittleEndian.PutUint64(mempool.buf[pBufStart:pBufStart+8], uint64(virtToPhys(uintptr(unsafe.Pointer(&mempool.buf[pBufStart])))))
+			binary.LittleEndian.PutUint64(mempool.buf[pBufStart:pBufStart+8], uint64(virtToPhys(uintptr(unsafe.Pointer(&mempool.buf[i*entrySize])))))
 			binary.LittleEndian.PutUint64(mempool.buf[pBufStart+8:pBufStart+16], uint64(uintptr(unsafe.Pointer(mempool))))
 			binary.LittleEndian.PutUint32(mempool.buf[pBufStart+16:pBufStart+20], i)
 			binary.LittleEndian.PutUint32(mempool.buf[pBufStart+20:pBufStart+24], 0)
@@ -148,36 +136,39 @@ func MemoryAllocateMempool(numEntries, entrySize uint32) *Mempool {
 }
 
 //PktBufAllocBatch allocates a batch of packets in the mempool
-func PktBufAllocBatch(mempool *Mempool, bufs [][]byte) uint32 {
+func PktBufAllocBatch(mempool *Mempool, bufs []*PktBuf) uint32 { //might try to fill from the front
 	numBufs := uint32(len(bufs))
 	if mempool.freeStackTop < numBufs {
 		fmt.Printf("memory pool %v only has %v free bufs, requested %v\n", mempool, mempool.freeStackTop, numBufs)
 		numBufs = mempool.freeStackTop
 	}
 	for i := uint32(0); i < numBufs; i++ {
+		if bufs[i] == nil {
+			bufs[i] = new(PktBuf)
+		}
 		entryID := mempool.freeStack[mempool.freeStackTop-1]
 		mempool.freeStackTop--
-		bufs[i] = mempool.buf[entryID*mempool.bufSize : (entryID+1)*mempool.bufSize] //possible problem
+		bufs[i].Pkt = mempool.buf[entryID*mempool.bufSize : (entryID+1)*mempool.bufSize]
+		bufs[i].mempool = mempool
 	}
 	return numBufs
 }
 
 //PktBufAlloc allocates a single packet in the mempool
-func PktBufAlloc(mempool *Mempool) []byte {
-	buf := make([][]byte, 1)
-	PktBufAllocBatch(mempool, buf)
+func PktBufAlloc(mempool *Mempool) *PktBuf {
+	buf := make([]*PktBuf, 1)
+	if PktBufAllocBatch(mempool, buf) == uint32(0) {
+		return nil
+	}
 	return buf[0]
 }
 
 //PktBufFree frees PktBuf
-func PktBufFree(buf []byte) {
-	var mempool *Mempool
+func PktBufFree(buf *PktBuf) {
 	if isBig {
-		mempool = (*Mempool)(unsafe.Pointer(uintptr(binary.BigEndian.Uint64(buf[8:16]))))
-		mempool.freeStack[mempool.freeStackTop] = binary.BigEndian.Uint32(buf[16:20])
+		buf.mempool.freeStack[buf.mempool.freeStackTop] = binary.BigEndian.Uint32(buf.Pkt[16:20])
 	} else {
-		mempool = (*Mempool)(unsafe.Pointer(uintptr(binary.LittleEndian.Uint64(buf[8:16]))))
-		mempool.freeStack[mempool.freeStackTop] = binary.LittleEndian.Uint32(buf[16:20])
+		buf.mempool.freeStack[buf.mempool.freeStackTop] = binary.LittleEndian.Uint32(buf.Pkt[16:20])
 	}
-	mempool.freeStackTop++
+	buf.mempool.freeStackTop++
 }

@@ -209,6 +209,7 @@ const (
 )
 
 //Recieve DMA Registers
+//Todo: Copypaste für den Rest
 func IXGBE_RDBAL(i int) int {
 	if i < 64 {
 		return 0x01000 + i*0x40

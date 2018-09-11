@@ -3,11 +3,12 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
-	"ixy-go/driver"
 	"log"
 	"os"
 	"time"
 	"unsafe"
+
+	"ixy.go/driver"
 )
 
 const (
@@ -25,9 +26,9 @@ func calcIPChecksum(data []byte) uint16 {
 	cs := uint32(0)
 	for i := 0; i < len(data)/2; i += 2 {
 		if isBig {
-			cs += uint32(binary.BigEndian.Uint16(data[i : i+1]))
+			cs += uint32(binary.BigEndian.Uint16(data[i : i+2]))
 		} else {
-			cs += uint32(binary.LittleEndian.Uint16(data[i : i+1]))
+			cs += uint32(binary.LittleEndian.Uint16(data[i : i+2]))
 		}
 		if cs > 0xFFFF {
 			cs = (cs & 0xFFFF) + 1 //16 bit one's complement
@@ -37,7 +38,7 @@ func calcIPChecksum(data []byte) uint16 {
 }
 
 func initMempool() *driver.Mempool {
-	//this is the packet we want so send
+	//this is the packet we want to send
 	pktData := []byte{
 		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, // dst MAC
 		0x11, 0x12, 0x13, 0x14, 0x15, 0x16, // src MAC
@@ -59,19 +60,19 @@ func initMempool() *driver.Mempool {
 	mempool := driver.MemoryAllocateMempool(uint32(numBufs), 0)
 	//pre-fill all our packet buffers with some templates that can be modified later
 	//we have to do it like this because sending is async in the hardware; we cannot re-use a buffer immediately
-	bufs := make([][]byte, numBufs)
+	bufs := make([]*driver.PktBuf, numBufs)
 	for bufID := 0; bufID < numBufs; bufID++ {
 		buf := driver.PktBufAlloc(mempool)
 		if isBig {
-			binary.BigEndian.PutUint32(buf[0][20:24], pktSize)
+			binary.BigEndian.PutUint32(buf.Pkt[20:24], pktSize)
 		} else {
-			binary.LittleEndian.PutUint32(buf[0][20:24], pktSize)
+			binary.LittleEndian.PutUint32(buf.Pkt[20:24], pktSize)
 		}
-		copy(buf[0][64:64+len(pktData)], pktData)
+		copy(buf.Pkt[64:64+pktSize], pktData)
 		if isBig {
-			binary.BigEndian.PutUint16(buf[0][64+24:64+25], calcIPChecksum(buf[0][64+14:64+34]))
+			binary.BigEndian.PutUint16(buf.Pkt[64+24:64+26], calcIPChecksum(buf.Pkt[64+14:64+34]))
 		} else {
-			binary.LittleEndian.PutUint16(buf[0][64+24:64+25], calcIPChecksum(buf[0][64+14:64+34]))
+			binary.LittleEndian.PutUint16(buf.Pkt[64+24:64+26], calcIPChecksum(buf.Pkt[64+14:64+34]))
 		}
 		bufs[bufID] = buf
 	}
@@ -106,19 +107,19 @@ func main() {
 	seqNum := uint32(0)
 
 	//bufs sent out in a batch
-	bufs := make([][]byte, batchSize)
+	bufs := make([]*driver.PktBuf, batchSize)
 
 	//tx loop
 	for {
-		// we cannot immediately recycle packets, we need to allocate new packets every time
-		// the old packets might still be used by the NIC: tx is async
+		//we cannot immediately recycle packets, we need to allocate new packets every time
+		//the old packets might still be used by the NIC: tx is async
 		driver.PktBufAllocBatch(mempool, bufs)
 		for i := 0; i < batchSize; i++ {
 			//packets can be modified here, make sure to update the checksum when changing the IP header
 			if isBig {
-				binary.BigEndian.PutUint32(bufs[i][64+pktSize-4:64+pktSize], seqNum)
+				binary.BigEndian.PutUint32(bufs[i].Pkt[64+pktSize-4:64+pktSize], seqNum)
 			} else {
-				binary.LittleEndian.PutUint32(bufs[i][64+pktSize-4:64+pktSize], seqNum)
+				binary.LittleEndian.PutUint32(bufs[i].Pkt[64+pktSize-4:64+pktSize], seqNum)
 			}
 			seqNum++
 		}
@@ -126,7 +127,6 @@ func main() {
 		driver.IxyTxBatchBusyWait(dev, 0, bufs)
 
 		//don't check time for every packet, this yields +10% performance :)
-		counter++
 		if counter&0xFFF == 0 {
 			t := time.Now()
 			if t.Sub(lastStatsPrinted) > time.Second {
@@ -137,6 +137,7 @@ func main() {
 				lastStatsPrinted = t
 			}
 		}
+		counter++
 		//track stats
 	}
 }

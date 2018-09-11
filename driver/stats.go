@@ -24,7 +24,7 @@ func (stats *DeviceStats) PrintStats() {
 	fmt.Printf("[%v] TX: %v bytes %v packets\n", addr, stats.txBytes, stats.txPackets)
 }
 
-func diffMpps(pktsNew, pktsOld uint64, nanos time.Duration) float64 {
+func diffMpps(pktsNew, pktsOld uint64, nanos time.Duration) float64 { //get duration by start := time.Now();t := time.Now();elapsed := t.Sub(start)
 	return float64(pktsNew-pktsOld) / 1000000.0 / (float64(nanos) / 1000000000.0)
 }
 
@@ -54,15 +54,12 @@ func (stats *DeviceStats) PrintStatsDiff(statsOld *DeviceStats, nanos time.Durat
 	fmt.Printf("[%v] TX: %v Mbit/s %.2f Mpps\n", addr, diffMbit(stats.txBytes, statsOld.txBytes, stats.txPackets, statsOld.txPackets, nanos), diffMpps(stats.txPackets, statsOld.txPackets, nanos))
 }
 
-//get timestamp from time.Now() with nanosecond precision
-
 //StatsInit initialize device stats
 func (stats *DeviceStats) StatsInit(dev IxyInterface) {
 	stats.rxPackets = 0
 	stats.txPackets = 0
 	stats.rxBytes = 0
 	stats.txBytes = 0
-	//stats.rxDmaPackets = 0
 	stats.device = dev
 	if dev != nil {
 		dev.ReadStats(nil)

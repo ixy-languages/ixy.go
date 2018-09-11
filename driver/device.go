@@ -1,7 +1,6 @@
 package driver
 
 import (
-	"fmt"
 	"log"
 	"unsafe"
 )
@@ -12,8 +11,8 @@ var isBig = true
 
 //IxyInterface is the interface that has to be implemented for all substrates such as the ixgbe or virtio
 type IxyInterface interface {
-	RxBatch(uint16, [][]byte, uint32) uint32
-	TxBatch(uint16, [][]byte, uint32) uint32
+	RxBatch(uint16, []*PktBuf, uint32) uint32
+	TxBatch(uint16, []*PktBuf, uint32) uint32
 	ReadStats(*DeviceStats)
 	setPromisc(bool)
 	getLinkSpeed() uint32
@@ -36,21 +35,11 @@ func IxyInit(pciAddr string, rxQueues, txQueues uint16) IxyInterface {
 	if b[0] == 1 {
 		isBig = false
 	}
-	fmt.Println("Printing infos for device with pciAddr ", pciAddr, ":\n", "Big Endian? ", isBig)
 	//Read PCI configuration space
 	config := pciOpenResource(pciAddr, "config")
-	vendorID := readIo16(config, 0)
-	deviceID := readIo16(config, 2)
-	classID := readIo32(config, 8) >> 24
-	//print config to check against c implementation
-	fmt.Printf("vendorID: %x\n", vendorID)
-	fmt.Printf("deviceID: %x\n", deviceID)
-	fmt.Printf("classID: %x\n", classID)
-	commandReg := readIo16(config, 4)
-	fmt.Printf("command register: %x\n", commandReg)
-	statusReg := readIo16(config, 6)
-	fmt.Printf("status register: %x\n", statusReg)
-	//end print config; this should be all of the relevant registers
+	vendorID := readIo16C(config, 0)
+	deviceID := readIo16C(config, 2)
+	classID := readIo32C(config, 8) >> 24
 	config.Close()
 	if classID != 2 {
 		log.Fatalf("Device %v is not a NIC", pciAddr)
@@ -64,8 +53,8 @@ func IxyInit(pciAddr string, rxQueues, txQueues uint16) IxyInterface {
 }
 
 //IxyTxBatchBusyWait calls dev.TxBatch until all packets are queued with busy waiting
-func IxyTxBatchBusyWait(dev IxyInterface, queueID uint16, bufs [][]byte) {
+func IxyTxBatchBusyWait(dev IxyInterface, queueID uint16, bufs []*PktBuf) {
 	numBufs := uint32(len(bufs))
-	for numSent := uint32(0); numSent != numBufs; numSent += dev.TxBatch(0, bufs[numSent:], numBufs-numSent) {
+	for numSent := uint32(0); numSent != numBufs; numSent += dev.TxBatch(queueID, bufs[numSent:], numBufs-numSent) {
 	} //busy wait
 }
