@@ -8,7 +8,7 @@ import (
 	"ixy.go/driver"
 )
 
-const batchSize = 32
+const batchSize = 256
 
 func forward(rxDev, txDev driver.IxyInterface, rxQueue, txQueue uint16) {
 	bufs := make([]*driver.PktBuf, batchSize)
