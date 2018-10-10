@@ -1,6 +1,7 @@
 package driver
 
 import (
+	//"fmt"
 	"log"
 	"unsafe"
 )
@@ -11,8 +12,8 @@ var isBig = true
 
 //IxyInterface is the interface that has to be implemented for all substrates such as the ixgbe or virtio
 type IxyInterface interface {
-	RxBatch(uint16, []*PktBuf, uint32) uint32
-	TxBatch(uint16, []*PktBuf, uint32) uint32
+	RxBatch(uint16, []*PktBuf) uint32
+	TxBatch(uint16, []*PktBuf) uint32
 	ReadStats(*DeviceStats)
 	setPromisc(bool)
 	getLinkSpeed() uint32
@@ -55,6 +56,6 @@ func IxyInit(pciAddr string, rxQueues, txQueues uint16) IxyInterface {
 //IxyTxBatchBusyWait calls dev.TxBatch until all packets are queued with busy waiting
 func IxyTxBatchBusyWait(dev IxyInterface, queueID uint16, bufs []*PktBuf) {
 	numBufs := uint32(len(bufs))
-	for numSent := uint32(0); numSent != numBufs; numSent += dev.TxBatch(queueID, bufs[numSent:], numBufs-numSent) {
+	for numSent := uint32(0); numSent != numBufs; numSent += dev.TxBatch(queueID, bufs[numSent:]) {
 	} //busy wait
 }

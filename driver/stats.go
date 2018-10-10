@@ -8,7 +8,7 @@ import (
 //DeviceStats holds stats
 type DeviceStats struct {
 	device IxyInterface
-	rxPackets, txPackets, rxBytes, txBytes/*, rxDmaPackets*/ uint64
+	rxPackets, txPackets, rxBytes, txBytes uint64
 }
 
 //PrintStats prints stats

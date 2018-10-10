@@ -57,7 +57,7 @@ func virtToPhys(virt uintptr) uintptr {
 
 // allocate memory suitable for DMA access in huge pages
 // this requires hugetlbfs to be mounted at /mnt/huge
-func memoryAllocateDma(size uint32, requireContiguous bool) ([]byte, uintptr) { //maybe change so we don't have to return a struct butinstead return 2 values
+func memoryAllocateDma(size uint32, requireContiguous bool) ([]byte, uintptr) {
 	//round up to multiples of 2 MB if necessary, this is the wasteful part
 	if size%hugePageSize != 0 {
 		size = ((size >> hugePageBits) + 1) << hugePageBits
@@ -122,7 +122,7 @@ func MemoryAllocateMempool(numEntries, entrySize uint32) *Mempool {
 		pBufStart := i * entrySize
 		if isBig {
 			binary.BigEndian.PutUint64(mempool.buf[pBufStart:pBufStart+8], uint64(virtToPhys(uintptr(unsafe.Pointer(&mempool.buf[i*entrySize])))))
-			binary.BigEndian.PutUint64(mempool.buf[pBufStart+8:pBufStart+16], uint64(uintptr(unsafe.Pointer(mempool))))
+			binary.BigEndian.PutUint64(mempool.buf[pBufStart+8:pBufStart+16], uint64(uintptr(unsafe.Pointer(mempool)))) //technically unecessary
 			binary.BigEndian.PutUint32(mempool.buf[pBufStart+16:pBufStart+20], i)
 			binary.BigEndian.PutUint32(mempool.buf[pBufStart+20:pBufStart+24], 0)
 		} else {
@@ -146,8 +146,8 @@ func PktBufAllocBatch(mempool *Mempool, bufs []*PktBuf) uint32 { //might try to 
 		if bufs[i] == nil {
 			bufs[i] = new(PktBuf)
 		}
-		entryID := mempool.freeStack[mempool.freeStackTop-1]
 		mempool.freeStackTop--
+		entryID := mempool.freeStack[mempool.freeStackTop]
 		bufs[i].Pkt = mempool.buf[entryID*mempool.bufSize : (entryID+1)*mempool.bufSize]
 		bufs[i].mempool = mempool
 	}

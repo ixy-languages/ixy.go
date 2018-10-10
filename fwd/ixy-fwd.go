@@ -2,22 +2,23 @@ package main
 
 import (
 	"fmt"
-	"ixy.go/driver"
 	"os"
 	"time"
+
+	"ixy.go/driver"
 )
 
 const batchSize = 32
 
 func forward(rxDev, txDev driver.IxyInterface, rxQueue, txQueue uint16) {
 	bufs := make([]*driver.PktBuf, batchSize)
-	numRx := rxDev.RxBatch(rxQueue, bufs, batchSize)
+	numRx := rxDev.RxBatch(rxQueue, bufs)
 	if numRx > 0 {
 		//touch all packets, otherwise it's a completely unrealistic workload if the packet just stays in L3
 		for i := uint32(0); i < numRx; i++ {
-			bufs[i].Pkt[64]++ //it SHOULD work, well see if it doesn't compile
+			bufs[i].Pkt[64]++
 		}
-		numTx := txDev.TxBatch(txQueue, bufs, numRx) //todo: it fails here -> check bufs & everything else for correctness (how many cycles are successful etc)
+		numTx := txDev.TxBatch(txQueue, bufs[:numRx])
 		//there are two ways to handle the case that packets are not being sent out:
 		//either wait on tx or drop them; in this case it's better to drop them, otherwise we accumulate latency
 		for i := numTx; i < numRx; i++ {

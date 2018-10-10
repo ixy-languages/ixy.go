@@ -82,9 +82,7 @@ func (dev *ixgbeDevice) startRxQueue(queueID int) {
 			log.Fatal("failed to allocate rx descriptor")
 		}
 		if isBig {
-			//write into first 64 bits
-			binary.BigEndian.PutUint64(rxd.raw[:8], binary.BigEndian.Uint64(buf.Pkt[:8])+64) //get phys addr and add offset
-			//write into last 64 bits
+			binary.BigEndian.PutUint64(rxd.raw[:8], binary.BigEndian.Uint64(buf.Pkt[:8])+64)
 			binary.BigEndian.PutUint64(rxd.raw[8:], uint64(0))
 		} else {
 			binary.LittleEndian.PutUint64(rxd.raw[:8], binary.LittleEndian.Uint64(buf.Pkt[:8])+64)
@@ -178,7 +176,7 @@ func (dev *ixgbeDevice) initRx() {
 		clearCFlags32(dev.addr, IXGBE_DCA_RXCTRL(int(i)), 1<<12)
 	}
 
-	// start RX
+	//start RX
 	setCFlags32(dev.addr, IXGBE_RXCTRL, IXGBE_RXCTRL_RXEN)
 }
 
@@ -320,7 +318,7 @@ func ixgbeInit(pciAddr string, rxQueues, txQueues uint16) IxyInterface {
 	dev.ixy.NumRxQueues = rxQueues
 	dev.ixy.NumTxQueues = txQueues
 	dev.addr = pciMapResource(pciAddr)
-	dev.rxQueues = make([]ixgbeRxQueue, rxQueues) //todo: see if that's correct
+	dev.rxQueues = make([]ixgbeRxQueue, rxQueues)
 	dev.txQueues = make([]ixgbeTxQueue, txQueues)
 	dev.resetAndInit()
 	return dev
@@ -379,7 +377,8 @@ func wrapRing(index, ringSize uint16) uint16 {
 //try to receive a single packet if one is available, non-blocking
 //see datasheet section 7.1.9 for an explanation of the rx ring structure
 //tl;dr: we control the tail of the queue, the hardware the head
-func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs []*PktBuf, numBufs uint32) uint32 { //todo: cut numBufs and use len(bufs instead), also true for TxBatch
+func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs []*PktBuf) uint32 {
+	numBufs := uint32(len(bufs))
 	queue := &dev.rxQueues[queueID]
 	rxIndex := queue.rxIndex
 	lastRxIndex := rxIndex
@@ -389,7 +388,6 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs []*PktBuf, numBufs uint32) 
 		//since go doesn't support unions, we just use the raw byte array (slice)
 		descPtr := queue.descriptors[rxIndex].raw
 		var status uint32
-		//pure bits -> check raw[8], this is the relevant Byte
 		if isBig {
 			status = binary.BigEndian.Uint32(descPtr[8:12]) //bit 64 - 95 of the advanced rx recieve descriptor are the status/error
 		} else {
@@ -397,16 +395,14 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs []*PktBuf, numBufs uint32) 
 		}
 		if status&IXGBE_RXDADV_STAT_DD != 0 {
 			if status&IXGBE_RXDADV_STAT_EOP == 0 {
-				log.Fatal("multi-segment packets are not supported - increase buffer size or decrease MTU")
+				log.Fatalln("multi-segment packets are not supported - increase buffer size or decrease MTU")
 			}
-			//got a packet, read and copy the whole descriptor
-			desc := make([]byte, len(descPtr))
-			copy(desc, descPtr)
+			//got a packet
 			buf := queue.virtualAddresses[rxIndex]
 			if isBig {
-				binary.BigEndian.PutUint32(buf.Pkt[20:24], uint32(binary.BigEndian.Uint16(desc[12:14]))) //bit 96 - 111 of the advanced rx recieve descriptor are the length
+				binary.BigEndian.PutUint32(buf.Pkt[20:24], uint32(binary.BigEndian.Uint16(descPtr[12:14]))) //bit 96 - 111 of the advanced rx recieve descriptor are the length
 			} else {
-				binary.LittleEndian.PutUint32(buf.Pkt[20:24], uint32(binary.LittleEndian.Uint16(desc[12:14])))
+				binary.LittleEndian.PutUint32(buf.Pkt[20:24], uint32(binary.LittleEndian.Uint16(descPtr[12:14])))
 			}
 			//this would be the place to implement RX offloading by translating the device-specific flags
 			//to an independent representation in the buf (similiar to how DPDK works)
@@ -415,14 +411,14 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs []*PktBuf, numBufs uint32) 
 			if newBuf == nil {
 				//we could handle empty mempools more gracefully here, but it would be quite messy...
 				//make your mempools large enough
-				log.Fatal("failed to allocate new mbuf for rx, you are either leaking memory or your mempool is too small")
+				log.Fatalln("failed to allocate new mbuf for rx, you are either leaking memory or your mempool is too small")
 			}
 			//reset descriptor
 			if isBig {
-				binary.BigEndian.PutUint64(descPtr[:8], binary.BigEndian.Uint64(newBuf.Pkt[:8])+64) //uint64(virtToPhys(uintptr(unsafe.Pointer(&newBuf[64])))))
-				binary.BigEndian.PutUint64(descPtr[8:], uint64(0))                                  //resets the flags
+				binary.BigEndian.PutUint64(descPtr[:8], binary.BigEndian.Uint64(newBuf.Pkt[:8])+64)
+				binary.BigEndian.PutUint64(descPtr[8:], uint64(0)) //resets the flags
 			} else {
-				binary.LittleEndian.PutUint64(descPtr[:8], binary.LittleEndian.Uint64(newBuf.Pkt[:8])+64) //uint64(virtToPhys(uintptr(unsafe.Pointer(&newBuf[64])))))
+				binary.LittleEndian.PutUint64(descPtr[:8], binary.LittleEndian.Uint64(newBuf.Pkt[:8])+64)
 				binary.LittleEndian.PutUint64(descPtr[8:], uint64(0))
 			}
 			queue.virtualAddresses[rxIndex] = newBuf
@@ -448,7 +444,8 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs []*PktBuf, numBufs uint32) 
 //we control the tail, hardware the head
 //huge performance gains possible here by sending packets in batches - writing to TDT for every packet is not efficient
 //returns the number of packets transmitted, will not block when the queue is full
-func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs []*PktBuf, numBufs uint32) uint32 {
+func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs []*PktBuf) uint32 {
+	numBufs := uint32(len(bufs))
 	queue := &dev.txQueues[queueID]
 	//the descriptor is explained in section 7.2.3.2.4
 	//we just use a struct copy & pasted from intel (not), but it basically has two formats (hence a union):
@@ -506,8 +503,8 @@ func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs []*PktBuf, numBufs uint32) 
 	queue.cleanIndex = cleanIndex
 
 	//step 2: send out as many of our packets as possible
-	sent := uint32(0)
-	for ; sent < numBufs; sent++ {
+	var sent uint32
+	for sent = 0; sent < numBufs; sent++ {
 		nextIndex := wrapRing(curIndex, queue.numEntries)
 		//we are full if the next index is the one we are trying to reclaim
 		if cleanIndex == nextIndex {
