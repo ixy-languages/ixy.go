@@ -65,26 +65,26 @@ The arguments have to the pci slots of the NIC. They can be looked up by using t
 All capitalized variables and functions are exported. This includes the following:
 
 device.go:
-[IxyInterface](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L14) - declares the exported fuctions RxBatch, TxBatch and ReadStats that are implemented in ixgbe.go (and possibly VirtIO in the future)
-[IxyDevice](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L24)
-[IxyInit](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L32)
+[IxyInterface](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L14),
+[IxyDevice](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L24),
+[IxyInit](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L32),
 [IxyTxBatchBusy](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L57)
 
 ixgbe.go:
-[ReadStats](https://github.com/ixy-languages/ixy.go/blob/master/driver/ixgbe.go#L356)
-[RxBatch](https://github.com/ixy-languages/ixy.go/blob/master/driver/ixgbe.go#L380)
+[ReadStats](https://github.com/ixy-languages/ixy.go/blob/master/driver/ixgbe.go#L356),
+[RxBatch](https://github.com/ixy-languages/ixy.go/blob/master/driver/ixgbe.go#L380),
 [TxBatch](https://github.com/ixy-languages/ixy.go/blob/master/driver/ixgbe.go#L447)
 
 memory.go:
-[MemoryAllocateMempool](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L102)
-[PktBufAllocBatch](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L139)
-[PktBufAlloc](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L158)
+[MemoryAllocateMempool](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L102),
+[PktBufAllocBatch](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L139),
+[PktBufAlloc](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L158),
 [PktBufFree](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L167)
 
 stats.go:
-[DeviceStats](https://github.com/ixy-languages/ixy.go/blob/master/driver/stats.go#L9)
-[PrintStats](https://github.com/ixy-languages/ixy.go/blob/master/driver/stats.go#L15)
-[PrintStatsDiff](https://github.com/ixy-languages/ixy.go/blob/master/driver/stats.go#L38)
+[DeviceStats](https://github.com/ixy-languages/ixy.go/blob/master/driver/stats.go#L9),
+[PrintStats](https://github.com/ixy-languages/ixy.go/blob/master/driver/stats.go#L15),
+[PrintStatsDiff](https://github.com/ixy-languages/ixy.go/blob/master/driver/stats.go#L38),
 [StatsInit](https://github.com/ixy-languages/ixy.go/blob/master/driver/stats.go#L58)
 
 ### Example
