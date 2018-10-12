@@ -7,8 +7,9 @@ This is only tested on Debian distributions.
 
 ## Features
 
-* just over 1000 lines of Go code for the driver and two sample applications
+* just over 1000 lines of Go code for the driver and two sample applications (of which the forwarder is currently not working)
 * simple API to use, see this README
+* almost matches the speed of the C implementation but with the added features of Go
 
 ## Build instructions
 
@@ -52,11 +53,10 @@ There are two sample applications included in the ixy.go.
 You can run the packet generator with
 
 ```
-sudo ./pktgen 0000:AA:BB.C 
+sudo ./fwd 0000:AA:BB.C 0000:DD:EE.F
 ```
 
 The forwarder does not work yet.
-
 
 The arguments have to the pci slots of the NIC. They can be looked up by using the `lspci` command
 
@@ -65,10 +65,10 @@ The arguments have to the pci slots of the NIC. They can be looked up by using t
 All capitalized variables and functions are exported. This includes the following:
 
 device.go:
-[IxyInterface](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L14),
-[IxyDevice](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L24),
-[IxyInit](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L32),
-[IxyTxBatchBusy](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L57)
+[IxyInterface](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L13),
+[IxyDevice](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L23),
+[IxyInit](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L31),
+[IxyTxBatchBusy](https://github.com/ixy-languages/ixy.go/blob/master/driver/device.go#L56)
 
 ixgbe.go:
 [ReadStats](https://github.com/ixy-languages/ixy.go/blob/master/driver/ixgbe.go#L356),
@@ -76,9 +76,9 @@ ixgbe.go:
 [TxBatch](https://github.com/ixy-languages/ixy.go/blob/master/driver/ixgbe.go#L447)
 
 memory.go:
-[MemoryAllocateMempool](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L102),
-[PktBufAllocBatch](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L139),
-[PktBufAlloc](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L158),
+[MemoryAllocateMempool](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L103),
+[PktBufAllocBatch](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L142),
+[PktBufAlloc](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L156),
 [PktBufFree](https://github.com/ixy-languages/ixy.go/blob/master/driver/memory.go#L167)
 
 stats.go:

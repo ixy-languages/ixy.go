@@ -10,8 +10,7 @@ import (
 
 const batchSize = 256
 
-func forward(rxDev, txDev driver.IxyInterface, rxQueue, txQueue uint16) {
-	bufs := make([]*driver.PktBuf, batchSize)
+func forward(rxDev, txDev driver.IxyInterface, rxQueue, txQueue uint16, bufs []*driver.PktBuf) {
 	numRx := rxDev.RxBatch(rxQueue, bufs)
 	if numRx > 0 {
 		//touch all packets, otherwise it's a completely unrealistic workload if the packet just stays in L3
@@ -50,10 +49,11 @@ func main() {
 	stats2.StatsInit(dev2)
 	stats2old.StatsInit(dev2)
 
+	bufs := make([]*driver.PktBuf, batchSize)
 	counter := uint64(0)
 	for {
-		forward(dev1, dev2, 0, 0)
-		forward(dev2, dev1, 0, 0)
+		forward(dev1, dev2, 0, 0, bufs)
+		forward(dev2, dev1, 0, 0, bufs)
 
 		//don't poll the time unnecessarily
 		counter++

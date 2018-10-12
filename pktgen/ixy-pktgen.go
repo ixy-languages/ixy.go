@@ -86,7 +86,6 @@ func main() {
 		isBig = false
 	}
 
-	//if I swap these, the ids are correct, but no packets get sent out -> check why
 	mempool := initMempool()
 	dev := driver.IxyInit(os.Args[1], 1, 1)
 
@@ -98,34 +97,18 @@ func main() {
 	statsOld.StatsInit(dev)
 	seqNum := uint32(0)
 
-	//bufs sent out in a batch
-	bufs := make([]*driver.PktBuf, batchSize)
-
 	//tx loop
 	for {
 		//we cannot immediately recycle packets, we need to allocate new packets every time
 		//the old packets might still be used by the NIC: tx is async
-		alloc := driver.PktBufAllocBatch(mempool, bufs)
-		for i := uint32(0); i < alloc; i++ {
+		bufs := driver.PktBufAllocBatch(mempool, batchSize)
+		for i := 0; i < len(bufs); i++ {
 			//packets can be modified here, make sure to update the checksum when changing the IP header
 			binary.BigEndian.PutUint32(bufs[i].Pkt[64+pktSize-4:64+pktSize], seqNum)
 			seqNum++
 		}
-		//debug: check again so we can be sure that everything is correct up until here -> wrong every time, IxyInit somehow overwrites shit in here
-		for i := uint32(0); i < alloc && check; i++ {
-			var memidx uint32
-			if isBig {
-				memidx = binary.BigEndian.Uint32(bufs[i].Pkt[16:20])
-			} else {
-				memidx = binary.LittleEndian.Uint32(bufs[i].Pkt[16:20])
-			}
-			if memidx != 2047-i {
-				log.Fatalf("Messed up ids after first allocation:\nPkt nr %v should have %v but has %v instead.\n", i+1, 2047-i, memidx)
-			}
-		}
-		check = false
 		//the packets could be modified here to generate multiple flows
-		driver.IxyTxBatchBusyWait(dev, 0, bufs[:alloc])
+		driver.IxyTxBatchBusyWait(dev, 0, bufs)
 
 		//don't check time for every packet, this yields +10% performance :)
 		if counter&0xFFF == 0 {
