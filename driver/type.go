@@ -1,5 +1,9 @@
 package driver
 
+/*import (
+	"encoding/binary"
+)*/
+
 //we ignore go conventions here as it's basically a copypaste
 
 func IXGBE_BY_MAC(hw, r int) int { return 0 }
@@ -869,6 +873,7 @@ const (
 
 //"As Go doesn't have support for C's union type in the general case, C's union types are represented as a Go byte array with the same length."
 //https://golang.org/cmd/cgo/
+//instead we define functions on the types
 
 /* Receive Descriptor - Advanced */
 /*union ixgbe_adv_rx_desc {
@@ -904,6 +909,89 @@ type IxgbeAdvRxDesc struct {
 	raw []byte
 }
 
+/*
+// we set the read struct
+func (desc *IxgbeAdvRxDesc) read_pktAddr(pktAddr uint64) {
+	if isBig {
+		binary.BigEndian.PutUint64(desc.raw[:8], pktAddr)
+	} else {
+		binary.LittleEndian.PutUint64(desc.raw[:8], pktAddr)
+	}
+}
+
+func (desc *IxgbeAdvRxDesc) read_hdrAddr(hdrAddr uint64) {
+	if isBig {
+		binary.BigEndian.PutUint64(desc.raw[8:], hdrAddr)
+	} else {
+		binary.LittleEndian.PutUint64(desc.raw[8:], hdrAddr)
+	}
+}
+
+// the NIC writes back the descriptors
+func (desc *IxgbeAdvRxDesc) wb_pktInfo() uint16 {	//RSS, Pkt type
+	if isBig {
+		return binary.BigEndian.Uint16(desc.raw[:2])
+	}
+	return binary.LittleEndian.Uint16(desc.raw[:2])
+}
+
+func (desc *IxgbeAdvRxDesc) wb_hdrInfo() uint16 {	 //Splithdr, hdrlen
+	if isBig {
+		return binary.BigEndian.Uint16(desc.raw[2:4])
+	}
+	return binary.LittleEndian.Uint16(desc.raw[2:4])
+}
+
+func (desc *IxgbeAdvRxDesc) wb_data() uint32 {	 //data
+	if isBig {
+		return binary.BigEndian.Uint32(desc.raw[0:4])
+	}
+	return binary.LittleEndian.Uint32(desc.raw[0:4])
+}
+
+func (desc *IxgbeAdvRxDesc) wb_rss() uint32 {	 //RSS Hash
+	if isBig {
+		return binary.BigEndian.Uint32(desc.raw[4:8])
+	}
+	return binary.LittleEndian.Uint32(desc.raw[4:8])
+}
+
+func (desc *IxgbeAdvRxDesc) wb_ipID() uint16 {	 //IP ID
+	if isBig {
+		return binary.BigEndian.Uint16(desc.raw[4:6])
+	}
+	return binary.LittleEndian.Uint16(desc.raw[4:6])
+}
+
+func (desc *IxgbeAdvRxDesc) wb_csum() uint16 {	 //Packet Checksum
+	if isBig {
+		return binary.BigEndian.Uint16(desc.raw[6:8])
+	}
+	return binary.LittleEndian.Uint16(desc.raw[6:8])
+}
+
+func (desc *IxgbeAdvRxDesc) wb_statusError() uint32 {	 //ext status/error
+	if isBig {
+		return binary.BigEndian.Uint32(desc.raw[8:12])
+	}
+	return binary.LittleEndian.Uint32(desc.raw[8:12])
+}
+
+func (desc *IxgbeAdvRxDesc) wb_length() uint16 {	 //Packet length
+	if isBig {
+		return binary.BigEndian.Uint16(desc.raw[12:14])
+	}
+	return binary.LittleEndian.Uint16(desc.raw[12:14])
+}
+
+func (desc *IxgbeAdvRxDesc) wb_vlan() uint16 {	 //VLAN tag
+	if isBig {
+		return binary.BigEndian.Uint16(desc.raw[14:])
+	}
+	return binary.LittleEndian.Uint16(desc.raw[14:])
+}
+*/
+
 /* Transmit Descriptor - Advanced */
 /*union ixgbe_adv_tx_desc {
 	struct {
@@ -920,3 +1008,45 @@ type IxgbeAdvRxDesc struct {
 type IxgbeAdvTxDesc struct {
 	raw []byte
 }
+
+/*func (desc *IxgbeAdvTxDesc) read_bufferAddr(bufAddr uint64) {	//Address of descriptor's data buf
+	if isBig {
+		binary.BigEndian.PutUint64(desc.raw[:8], bufAddr)
+	}
+	binary.LittleEndian.PutUint64(desc.raw[:8], bufAddr)
+}
+
+func (desc *IxgbeAdvTxDesc) read_cmdTypeLen(cmdTypeLen uint32) {
+	if isBig {
+		binary.BigEndian.PutUint32(desc.raw[8:12], cmdTypeLen)
+	}
+	binary.LittleEndian.PutUint32(desc.raw[8:12], cmdTypeLen)
+}
+
+func (desc *IxgbeAdvTxDesc) read_olinfoStatus(olinfo uint32) {
+	if isBig {
+		binary.BigEndian.PutUint32(desc.raw[12:], olinfo)
+	}
+	binary.LittleEndian.PutUint32(desc.raw[12:], olinfo)
+}
+
+func (desc *IxgbeAdvTxDesc) wb_rsvd() uint64 {	//reserved
+	if isBig {
+		return binary.BigEndian.Uint64(desc.raw[:8])
+	}
+	return binary.LittleEndian.Uint64(desc.raw[:8])
+}
+
+func (desc *IxgbeAdvTxDesc) wb_nxtseqSeed() uint32 {
+	if isBig {
+		return binary.BigEndian.Uint32(desc.raw[8:12])
+	}
+	return binary.LittleEndian.Uint32(desc.raw[8:12])
+}
+
+func (desc *IxgbeAdvTxDesc) wb_status() uint32 {
+	if isBig {
+		return binary.BigEndian.Uint32(desc.raw[12:])
+	}
+	return binary.LittleEndian.Uint32(desc.raw[12:])
+}*/

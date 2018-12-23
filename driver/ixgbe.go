@@ -81,11 +81,13 @@ func (dev *ixgbeDevice) startRxQueue(queueID int) {
 		if buf == nil {
 			log.Fatal("failed to allocate rx descriptor")
 		}
+		//rxd.read_pktAddr(buf.PhyAddr)
+		//rxd.read_hdrAddr(uint64(0))
 		if isBig {
-			binary.BigEndian.PutUint64(rxd.raw[:8], binary.BigEndian.Uint64(buf.Pkt[:8])+64)
+			binary.BigEndian.PutUint64(rxd.raw[:8], buf.PhyAddr)
 			binary.BigEndian.PutUint64(rxd.raw[8:], uint64(0))
 		} else {
-			binary.LittleEndian.PutUint64(rxd.raw[:8], binary.LittleEndian.Uint64(buf.Pkt[:8])+64)
+			binary.LittleEndian.PutUint64(rxd.raw[:8], buf.PhyAddr)
 			binary.LittleEndian.PutUint64(rxd.raw[8:], uint64(0))
 		}
 		queue.virtualAddresses[i] = buf
@@ -386,12 +388,13 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs []*PktBuf) uint32 {
 	for ; bufIndex < numBufs; bufIndex++ {
 		//rx descriptors are explained in 7.1.5, advances rx descriptors in 7.1.6
 		//since go doesn't support unions, we just use the raw byte array (slice)
-		descPtr := queue.descriptors[rxIndex].raw
+		rxd := queue.descriptors[rxIndex]
+		//status := rxd.wb_statusError()
 		var status uint32
 		if isBig {
-			status = binary.BigEndian.Uint32(descPtr[8:12]) //bit 64 - 95 of the advanced rx recieve descriptor are the status/error
+			status = binary.BigEndian.Uint32(rxd.raw[8:12]) //bit 64 - 95 of the advanced rx receive descriptor are the status/error
 		} else {
-			status = binary.LittleEndian.Uint32(descPtr[8:12])
+			status = binary.LittleEndian.Uint32(rxd.raw[8:12])
 		}
 		if status&IXGBE_RXDADV_STAT_DD != 0 {
 			if status&IXGBE_RXDADV_STAT_EOP == 0 {
@@ -399,10 +402,11 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs []*PktBuf) uint32 {
 			}
 			//got a packet
 			buf := queue.virtualAddresses[rxIndex]
+			//buf.Size = uint32(rxd.wb_length())
 			if isBig {
-				binary.BigEndian.PutUint32(buf.Pkt[20:24], uint32(binary.BigEndian.Uint16(descPtr[12:14]))) //bit 96 - 111 of the advanced rx recieve descriptor are the length
+				buf.Size = uint32(binary.BigEndian.Uint16(rxd.raw[12:14]))
 			} else {
-				binary.LittleEndian.PutUint32(buf.Pkt[20:24], uint32(binary.LittleEndian.Uint16(descPtr[12:14])))
+				buf.Size = uint32(binary.LittleEndian.Uint16(rxd.raw[12:14]))
 			}
 			//this would be the place to implement RX offloading by translating the device-specific flags
 			//to an independent representation in the buf (similiar to how DPDK works)
@@ -414,12 +418,14 @@ func (dev *ixgbeDevice) RxBatch(queueID uint16, bufs []*PktBuf) uint32 {
 				log.Fatalln("failed to allocate new mbuf for rx, you are either leaking memory or your mempool is too small")
 			}
 			//reset descriptor
+			//rxd.read_pktAddr(newBuf.PhyAddr)
+			//rxd.read_hdrAddr(uint64(0))
 			if isBig {
-				binary.BigEndian.PutUint64(descPtr[:8], binary.BigEndian.Uint64(newBuf.Pkt[:8])+64)
-				binary.BigEndian.PutUint64(descPtr[8:], uint64(0)) //resets the flags
+				binary.BigEndian.PutUint64(rxd.raw[:8], newBuf.PhyAddr)
+				binary.BigEndian.PutUint64(rxd.raw[8:], uint64(0)) //resets the flags
 			} else {
-				binary.LittleEndian.PutUint64(descPtr[:8], binary.LittleEndian.Uint64(newBuf.Pkt[:8])+64)
-				binary.LittleEndian.PutUint64(descPtr[8:], uint64(0))
+				binary.LittleEndian.PutUint64(rxd.raw[:8], newBuf.PhyAddr)
+				binary.LittleEndian.PutUint64(rxd.raw[8:], uint64(0))
 			}
 			queue.virtualAddresses[rxIndex] = newBuf
 			bufs[bufIndex] = buf
@@ -475,6 +481,7 @@ func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs []*PktBuf) uint32 {
 			cleanupTo -= queue.numEntries
 		}
 		txd := queue.descriptors[cleanupTo]
+		//status := txd.wb_status()
 		var status uint32
 		if isBig {
 			status = binary.BigEndian.Uint32(txd.raw[12:]) //last 32 bit
@@ -516,21 +523,22 @@ func (dev *ixgbeDevice) TxBatch(queueID uint16, bufs []*PktBuf) uint32 {
 		queue.txIndex = wrapRing(queue.txIndex, queue.numEntries)
 		txd := queue.descriptors[curIndex]
 		//NIC reads from here
+		//txd.read_bufferAddr(buf.PhyAddr)
+		//txd.read_cmdTypeLen(IXGBE_ADVTXD_DCMD_EOP|IXGBE_ADVTXD_DCMD_RS|IXGBE_ADVTXD_DCMD_IFCS|IXGBE_ADVTXD_DCMD_DEXT|IXGBE_ADVTXD_DTYP_DATA|buf.Size)
+		//txd.read_olinfoStatus(buf.Size<<IXGBE_ADVTXD_PAYLEN_SHIFT)
 		if isBig {
-			size := binary.BigEndian.Uint32(buf.Pkt[20:24])
-			binary.BigEndian.PutUint64(txd.raw[:8], binary.BigEndian.Uint64(buf.Pkt[:8])+64)
+			binary.BigEndian.PutUint64(txd.raw[:8], buf.PhyAddr)
 			//always the same flags: one buffer (EOP), advanced data descriptor, CRC offload, data length
-			binary.BigEndian.PutUint32(txd.raw[8:12], IXGBE_ADVTXD_DCMD_EOP|IXGBE_ADVTXD_DCMD_RS|IXGBE_ADVTXD_DCMD_IFCS|IXGBE_ADVTXD_DCMD_DEXT|IXGBE_ADVTXD_DTYP_DATA|size)
+			binary.BigEndian.PutUint32(txd.raw[8:12], IXGBE_ADVTXD_DCMD_EOP|IXGBE_ADVTXD_DCMD_RS|IXGBE_ADVTXD_DCMD_IFCS|IXGBE_ADVTXD_DCMD_DEXT|IXGBE_ADVTXD_DTYP_DATA|buf.Size)
 			//no fancy offloading stuff - only the total payload length
 			//implement offloading flags here:
 			// 	* ip checksum offloading is trivial: just set the offset
 			// 	* tcp/udp checksum offloading is more annoying, you have to precalculate the pseudo-header checksum
-			binary.BigEndian.PutUint32(txd.raw[12:16], size<<IXGBE_ADVTXD_PAYLEN_SHIFT)
+			binary.BigEndian.PutUint32(txd.raw[12:16], buf.Size<<IXGBE_ADVTXD_PAYLEN_SHIFT)
 		} else {
-			size := binary.LittleEndian.Uint32(buf.Pkt[20:24])
-			binary.LittleEndian.PutUint64(txd.raw[:8], binary.LittleEndian.Uint64(buf.Pkt[:8])+64)
-			binary.LittleEndian.PutUint32(txd.raw[8:12], IXGBE_ADVTXD_DCMD_EOP|IXGBE_ADVTXD_DCMD_RS|IXGBE_ADVTXD_DCMD_IFCS|IXGBE_ADVTXD_DCMD_DEXT|IXGBE_ADVTXD_DTYP_DATA|size)
-			binary.LittleEndian.PutUint32(txd.raw[12:16], size<<IXGBE_ADVTXD_PAYLEN_SHIFT)
+			binary.LittleEndian.PutUint64(txd.raw[:8], buf.PhyAddr)
+			binary.LittleEndian.PutUint32(txd.raw[8:12], IXGBE_ADVTXD_DCMD_EOP|IXGBE_ADVTXD_DCMD_RS|IXGBE_ADVTXD_DCMD_IFCS|IXGBE_ADVTXD_DCMD_DEXT|IXGBE_ADVTXD_DTYP_DATA|buf.Size)
+			binary.LittleEndian.PutUint32(txd.raw[12:16], buf.Size<<IXGBE_ADVTXD_PAYLEN_SHIFT)
 		}
 		curIndex = nextIndex
 	}
