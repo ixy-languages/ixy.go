@@ -37,9 +37,9 @@ func IxyInit(pciAddr string, rxQueues, txQueues uint16) IxyInterface {
 	}
 	//Read PCI configuration space
 	config := pciOpenResource(pciAddr, "config")
-	vendorID := readIo16C(config, 0)
-	deviceID := readIo16C(config, 2)
-	classID := readIo32C(config, 8) >> 24
+	vendorID := readIo16(config, 0)
+	deviceID := readIo16(config, 2)
+	classID := readIo32(config, 8) >> 24
 	config.Close()
 	if classID != 2 {
 		log.Fatalf("Device %v is not a NIC", pciAddr)
