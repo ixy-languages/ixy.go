@@ -4,11 +4,16 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"flag"
+	"log"
 
 	"ixy.go/driver"
 )
 
 const batchSize = 256
+
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
 
 func forward(rxDev, txDev driver.IxyInterface, rxQueue, txQueue uint16, bufs []*driver.PktBuf) {
 	numRx := rxDev.RxBatch(rxQueue, bufs)
@@ -32,6 +37,18 @@ func main() {
 		fmt.Printf("Usage: %v <pci bus id2> <pci bus id1>\n", os.Args[0])
 		return
 	}
+	
+	//CPU profiling
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+	
 	dev1 := driver.IxyInit(os.Args[1], 1, 1)
 	dev2 := driver.IxyInit(os.Args[2], 1, 1)
 	if dev1 == nil || dev2 == nil {
