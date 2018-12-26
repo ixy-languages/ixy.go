@@ -6,6 +6,7 @@ import (
 	"time"
 	"flag"
 	"log"
+	"runtime/pprof"
 
 	"ixy.go/driver"
 )
@@ -40,14 +41,13 @@ func main() {
 	
 	//CPU profiling
 	flag.Parse()
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
+	f, err := os.Create(*cpuprofile)
+        if err != nil {
+            log.Fatal("could not create CPU profile: ", err)
+        }
+        if err := pprof.StartCPUProfile(f); err != nil {
+            log.Fatal("could not start CPU profile: ", err)
+        }
 	
 	dev1 := driver.IxyInit(os.Args[1], 1, 1)
 	dev2 := driver.IxyInit(os.Args[2], 1, 1)
@@ -90,4 +90,6 @@ func main() {
 			}
 		}
 	}
+	pprof.StopCPUProfile()
+	f.Close()
 }
