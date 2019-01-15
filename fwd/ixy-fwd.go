@@ -38,23 +38,6 @@ func main() {
 		fmt.Printf("Usage: %v <pci bus id2> <pci bus id1>\n", os.Args[0])
 		return
 	}
-	
-	//CPU profiling
-	flag.Parse()
-	f, err := os.Create(*cpuprofile)
-        if err != nil {
-            log.Fatal("could not create CPU profile: ", err)
-        }
-        if err := pprof.StartCPUProfile(f); err != nil {
-            log.Fatal("could not start CPU profile: ", err)
-        }
-	
-	dev1 := driver.IxyInit(os.Args[1], 1, 1)
-	dev2 := driver.IxyInit(os.Args[2], 1, 1)
-	if dev1 == nil || dev2 == nil {
-		fmt.Print("trying to start driver with unsupported device, exiting now\n")
-		return
-	}
 
 	lastStatsPrinted := time.Now() //includes monotonic clock reading
 	stats1 := driver.DeviceStats{}
@@ -90,6 +73,4 @@ func main() {
 			}
 		}
 	}
-	pprof.StopCPUProfile()
-	f.Close()
 }
