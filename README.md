@@ -1,15 +1,17 @@
 # ixy.go
 
 ixy.go is a Go rewrite of the [ixy](https://github.com/emmericp/ixy) userspace network driver.
-It is designed to be readable, idiomatic Go code.
-It supports Intel 82599 10GbE NICs (`ixgbe` family).
+Check out my thesis [Writing Network Drivers in Go](https://www.net.in.tum.de/fileadmin/bibtex/publications/theses/2018-ixy-go.pdf) or [watch the recording of our talk at 35c3](https://media.ccc.de/v/35c3-9670-safe_and_secure_drivers_in_high-level_languages) to learn more and check out the [other ixy implementations](https://github.com/ixy-languages).
+
+ixy.go is designed to be readable, idiomatic Go code with the goal of not only being fast, but also serve as learning material for those interested.
+We only support the Intel 82599 10GbE NICs (`ixgbe` family).
 This is only tested on Debian distributions.
 
 ## Features
 
 * just over 1000 lines of Go code for the driver and two sample applications (of which the forwarder is currently not working)
 * simple API to use, see this README
-* almost matches the speed of the C implementation but with the added features of Go
+* almost matches the speed of the C implementation but with the added features of Go (~10% performance loss, depending on batch sizes and CPU speed)
 
 ## Build instructions
 
@@ -31,6 +33,8 @@ The script downloads the repository to ~/go/src/ixy.go:
 ```
 cd ~/go/src/ixy.go
 ```
+
+If you already have Go installed, just clone the repository instead and continue from here.
 
 Ixy.go uses hugepages. To enable them run:
 
@@ -104,7 +108,3 @@ ixy.go is licensed under the MIT license.
 ixy.go is not production-ready.
 Do not use it in critical environments.
 DMA may corrupt memory.
-
-## Other languages
-
-Check out the [other ixy implementations](https://github.com/ixy-languages).
