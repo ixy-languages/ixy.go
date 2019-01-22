@@ -4,16 +4,11 @@ import (
 	"fmt"
 	"os"
 	"time"
-	"flag"
-	"log"
-	"runtime/pprof"
 
 	"ixy.go/driver"
 )
 
 const batchSize = 256
-
-var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 
 func forward(rxDev, txDev driver.IxyInterface, rxQueue, txQueue uint16, bufs []*driver.PktBuf) {
@@ -36,6 +31,13 @@ func main() {
 	if len(os.Args) != 3 {
 		fmt.Printf("%v forwards packets between two ports.\n", os.Args[0])
 		fmt.Printf("Usage: %v <pci bus id2> <pci bus id1>\n", os.Args[0])
+		return
+	}
+	
+	dev1 := driver.IxyInit(os.Args[1], 1, 1)
+	dev2 := driver.IxyInit(os.Args[2], 1, 1)
+	if dev1 == nil || dev2 == nil {
+		fmt.Print("trying to start driver with unsupported device, exiting now\n")
 		return
 	}
 
