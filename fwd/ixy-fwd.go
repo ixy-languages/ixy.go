@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"ixy.go/driver"
+	"github.com/ixy-languages/ixy.go/driver"
 )
 
 const batchSize = 256

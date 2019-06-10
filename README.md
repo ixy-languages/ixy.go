@@ -15,34 +15,32 @@ This is only tested on Debian distributions.
 
 ## Build instructions
 
-You will need the go compiler.
-Install using the script provided (ixy.go-install.sh):
+You will need the go compiler. If you already have it, skip this step.
+Install using the script provided (ixy.go-install.sh) with the version number as the argument. Default is 1.12.5, but you can find the most up to date one [here](https://golang.org/dl/):
 
 ```
-sudo ./ixy.go-install.sh
+sudo ./ixy.go-install.sh 1.12.5
 ```
 
-Go is added to PATH by the script but to use it before a restart execute
+Go is added to PATH by the script but to use it before a restart execute:
 
 ```
 source ~/.profile
 ```
 
-The script downloads the repository to ~/go/src/ixy.go:
+Next get this repository via the go get command (start here if you already have go installed):
 
 ```
-cd ~/go/src/ixy.go
+go get github.com/ixy-languages/ixy.go
 ```
 
-If you already have Go installed, just clone the repository instead and continue from here.
-
-Ixy.go uses hugepages. To enable them run:
+Ixy.go uses hugepages. To enable them cd into the project folder and execute the hugetable script:
 
 ```
 sudo ./setup-hugetlbfs.sh
 ```
 
-To build the binaries, cd into the folders of the respective application and execute
+To build the binaries, cd into the folders of the respective application and execute:
 
 ```
 go build
@@ -54,7 +52,7 @@ The built binaries are located the respective folders.
 ## Usage
 
 There are two sample applications included in the ixy.go.
-You can run the packet generator with
+You can run the packet generator with:
 
 ```
 sudo ./fwd 0000:AA:BB.C 0000:DD:EE.F
@@ -62,7 +60,7 @@ sudo ./fwd 0000:AA:BB.C 0000:DD:EE.F
 
 The forwarder does not work yet.
 
-The arguments have to the pci slots of the NIC. They can be looked up by using the `lspci` command
+The arguments have to the pci slots of the NIC. They can be looked up by using the `lspci` command.
 
 ### API
 
