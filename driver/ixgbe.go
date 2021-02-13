@@ -222,7 +222,7 @@ func (dev *ixgbeDevice) initTx() {
 		txdctl := getReg32(dev.addr, IXGBE_TXDCTL(int(i)))
 		//there are no defines for this in ixgbe_h for some reason
 		//pthresh: 6:0, hthresh: 14:8, wthresh: 22:16
-		txdctl &= ^(uint32(0x3F | (0x3F << 8) | (0x3F << 16))) //clear bits
+		txdctl &= ^(uint32(0x7F | (0x7F << 8) | (0x7F << 16))) //clear bits
 		txdctl |= (36 | (8 << 8) | (4 << 16))                  //from DPDK
 		setReg32(dev.addr, IXGBE_TXDCTL(int(i)), txdctl)
 
