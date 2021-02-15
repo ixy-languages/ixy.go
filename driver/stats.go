@@ -5,10 +5,39 @@ import (
 	"time"
 )
 
-//DeviceStats holds stats
+// DeviceStats holds stats for a device
 type DeviceStats struct {
 	device IxyInterface
-	rxPackets, txPackets, rxBytes, txBytes uint64
+	RXPackets, TXPackets, RXBytes, TXBytes uint64
+}
+
+// Reset resets the packet and byte counters
+func (stats *DeviceStats) Reset() {
+	stats.RXPackets = 0
+	stats.TXPackets = 0
+	stats.RXBytes = 0
+	stats.TXBytes = 0
+}
+
+// Diff subtracts the given statistics and returns the difference.
+// The difference is not linked to any device, and cannot be used further.
+func (stats *DeviceStats) Diff(old *DeviceStats) *DeviceStats {
+	return &DeviceStats {
+		RXPackets: stats.RXPackets - old.RXPackets,
+		TXPackets: stats.TXPackets - old.TXPackets,
+		RXBytes:   stats.RXBytes - old.RXBytes,
+		TXBytes:   stats.TXBytes - old.TXBytes,
+	}
+}
+
+// Rate returns the traffic rates given old statistics and the time between the old and current statistics.
+func (stats *DeviceStats) Rate(old *DeviceStats, dt time.Duration) (rxpps, txpps, rxBps, txBps float64) {
+	diff := stats.Diff(old)
+	rxpps = float64(diff.RXPackets) / dt.Seconds()
+	txpps = float64(diff.TXPackets) / dt.Seconds()
+	rxBps = float64(diff.RXBytes) / dt.Seconds()
+	txBps = float64(diff.TXBytes) / dt.Seconds()
+	return
 }
 
 //PrintStats prints stats
@@ -20,22 +49,13 @@ func (stats *DeviceStats) PrintStats() {
 	} else {
 		addr = "???"
 	}
-	fmt.Printf("[%v] RX: %v bytes %v packets\n", addr, stats.rxBytes, stats.rxPackets)
-	fmt.Printf("[%v] TX: %v bytes %v packets\n", addr, stats.txBytes, stats.txPackets)
-}
-
-func diffMpps(pktsNew, pktsOld uint64, nanos time.Duration) float64 { //get duration by start := time.Now();t := time.Now();elapsed := t.Sub(start)
-	return float64(pktsNew-pktsOld) / 1000000.0 / (float64(nanos) / 1000000000.0)
-}
-
-func diffMbit(bytesNew, bytesOld, pktsNew, pktsOld uint64, nanos time.Duration) uint32 {
-	// take stuff on the wire into account, i.e., the preamble, SFD and IFG (20 bytes)
-	// otherwise it won't show up as 10000 mbit/s with small packets which is confusing
-	return uint32((float64(bytesNew-bytesOld)/1000000.0/(float64(nanos)/1000000000.0))*8 + diffMpps(pktsNew, pktsOld, nanos)*20*8)
+	fmt.Printf("[%v] RX: %v bytes %v packets\n", addr, stats.RXBytes, stats.RXBytes)
+	fmt.Printf("[%v] TX: %v bytes %v packets\n", addr, stats.TXBytes, stats.TXPackets)
 }
 
 //PrintStatsDiff get difference between reciever and previous stats
 func (stats *DeviceStats) PrintStatsDiff(statsOld *DeviceStats, nanos time.Duration) {
+	rxpps, txpps, rxBps, txBps := stats.Rate(statsOld, nanos)
 	oldDev := statsOld.device.getIxyDev()
 	newDev := stats.device.getIxyDev()
 	var addr string
@@ -44,22 +64,19 @@ func (stats *DeviceStats) PrintStatsDiff(statsOld *DeviceStats, nanos time.Durat
 	} else {
 		addr = "???"
 	}
-	fmt.Printf("[%v] RX: %v Mbit/s %.2f Mpps\n", addr, diffMbit(stats.rxBytes, statsOld.rxBytes, stats.rxPackets, statsOld.rxPackets, nanos), diffMpps(stats.rxPackets, statsOld.rxPackets, nanos))
-	//fmt.Printf("[%v] DMA Good Packets: %v\n", addr, stats.rxDmaPackets)
+	fmt.Printf("[%v] RX: %v Mbit/s %.2f Mpps\n", addr, rxBps/1e6, rxpps/1e6)
+
 	if stats.device != nil {
 		addr = newDev.PciAddr
 	} else {
 		addr = "???"
 	}
-	fmt.Printf("[%v] TX: %v Mbit/s %.2f Mpps\n", addr, diffMbit(stats.txBytes, statsOld.txBytes, stats.txPackets, statsOld.txPackets, nanos), diffMpps(stats.txPackets, statsOld.txPackets, nanos))
+	fmt.Printf("[%v] TX: %v Mbit/s %.2f Mpps\n", addr, txBps/1e6, txpps/1e6)
 }
 
 //StatsInit initialize device stats
 func (stats *DeviceStats) StatsInit(dev IxyInterface) {
-	stats.rxPackets = 0
-	stats.txPackets = 0
-	stats.rxBytes = 0
-	stats.txBytes = 0
+	stats.Reset()
 	stats.device = dev
 	if dev != nil {
 		dev.ReadStats(nil)

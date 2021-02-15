@@ -362,10 +362,10 @@ func (dev *ixgbeDevice) ReadStats(stats *DeviceStats) {
 	txBytes := uint64(getReg32(dev.addr, IXGBE_GOTCL)) | uint64(getReg32(dev.addr, IXGBE_GOTCH))<<32
 	//rxDmaPkts := getReg32(dev.addr, IXGBE_RXDGPC)
 	if stats != nil {
-		stats.rxPackets += uint64(rxPkts)
-		stats.txPackets += uint64(txPkts)
-		stats.rxBytes += rxBytes
-		stats.txBytes += txBytes
+		stats.RXPackets += uint64(rxPkts)
+		stats.TXPackets += uint64(txPkts)
+		stats.RXBytes += rxBytes
+		stats.TXBytes += txBytes
 		//stats.rxDmaPackets += uint64(rxDmaPkts)
 	}
 }
